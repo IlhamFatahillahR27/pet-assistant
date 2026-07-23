@@ -1,0 +1,27 @@
+# Environment & Sensitive Variables
+.env
+*.env
+
+# Python Virtual Environment
+env_asisten/
+venv/
+.venv/
+env/
+ENV/
+
+# Python Cache & Bytecode Files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# IDE & Code Editor Settings
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS Generated Files
+Thumbs.db
+Desktop.ini
+.DS_Store
