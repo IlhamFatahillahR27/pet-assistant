@@ -92,24 +92,6 @@ python robot_app.py
 
 ---
 
-## 🔒 Mengapa File Tertentu di-Ignore dari GitHub?
-
-Proyek ini dilengkapi file `.gitignore` untuk mengabaikan beberapa file dan folder lokal berikut:
-
-### 1. File `.env`
-- **Alasan**: Berisi `GOOGLE_AI_STUDIO_API_KEY` (kunci rahasia API).
-- **Risiko jika di-push**: API Key milik Anda dapat diakses publik di GitHub. Pihak tidak bertanggung jawab bisa menggunakannya untuk menghabiskan kuota kuota API Anda atau menimbulkan tagihan tak terduga.
-
-### 2. Folder `env_asisten/` (Virtual Environment)
-- **Alasan**: Berisi file biner dan pustaka Python yang diunduh di komputer lokal Anda. Ukuran folder ini sangat besar (ratusan MB).
-- **Solusi**: Hanya simpan daftar pustaka di `requirements.txt`. Pengguna lain cukup menjalankan `pip install -r requirements.txt` untuk membuat environment identik.
-
-### 3. Folder `__pycache__/` & File `.pyc`
-- **Alasan**: Merupakan file kompilasi bytecode sementara yang dibuat otomatis oleh interpreter Python saat program dijalankan.
-- **Solusi**: File ini spesifik untuk eksekusi lokal dan tidak relevan untuk disimpan di repositori kode sumber.
-
----
-
 ## 📜 Lisensi
 
 Proyek ini dibuat untuk tujuan edukasi dan pengembangan asisten personal.
