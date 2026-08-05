@@ -6,3 +6,8 @@ PyAudio
 openwakeword
 onnxruntime
 numpy
+fastapi
+uvicorn[standard]
+websockets
+pydantic
+

@@ -1,5 +1,10 @@
 import pyttsx3
 import winreg
+import threading
+from settings_manager import settings_manager
+from ws_manager import ws_manager
+
+_tts_lock = threading.Lock()
 
 def get_available_voices():
     """
@@ -7,7 +12,7 @@ def get_available_voices():
     """
     voices_list = []
     
-    # 1. Coba ambil dari pyttsx3 standar (SAPI5)
+    # 1. pyttsx3 standar (SAPI5)
     try:
         engine = pyttsx3.init()
         for v in engine.getProperty('voices'):
@@ -18,7 +23,7 @@ def get_available_voices():
     except Exception:
         pass
         
-    # 2. Coba ambil dari Windows OneCore Registry (Sering dipakai Windows 10/11 untuk suara baru)
+    # 2. Windows OneCore Registry
     onecore_path = r"SOFTWARE\Microsoft\Speech_OneCore\Voices\Tokens"
     try:
         key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, onecore_path)
@@ -34,7 +39,6 @@ def get_available_voices():
             
             voice_id = f"HKEY_LOCAL_MACHINE\\{full_subkey_path}"
             
-            # Hindari duplikasi jika sudah terdaftar
             if not any(v['id'] == voice_id for v in voices_list):
                 voices_list.append({
                     'id': voice_id,
@@ -45,54 +49,67 @@ def get_available_voices():
         
     return voices_list
 
-def text_to_speech(text, rate=150, volume=1.0, language="id"):
+def text_to_speech(text: str, rate: int = None, volume: float = None, language: str = None, status_callback=None):
     """
-    Mengubah teks menjadi suara menggunakan pyttsx3 dengan dukungan multi-platform registry.
+    Mengubah teks menjadi suara menggunakan pyttsx3. Thread-safe dengan _tts_lock.
     """
-    try:
-        engine = pyttsx3.init()
+    settings = settings_manager.get_settings().get("tts", {})
+    if not settings.get("enabled", True):
+        print("[TTS] Fitur TTS sedang dinonaktifkan di pengaturan.")
+        return
 
-        # Atur parameter
-        engine.setProperty('rate', rate)
-        engine.setProperty('volume', volume)
+    rate = rate if rate is not None else settings.get("rate", 160)
+    volume = volume if volume is not None else settings.get("volume", 1.0)
+    language = language if language is not None else settings.get("language", "id")
 
-        # Cari suara terbaik yang cocok dengan filter bahasa
-        voices = get_available_voices()
-        selected_voice = None
-        
-        # Cari suara yang mengandung kata kunci bahasa (misal 'id' atau 'indonesia')
-        for voice in voices:
-            name_lower = voice['name'].lower()
-            id_lower = voice['id'].lower()
-            
-            # Pencarian spesifik bahasa indonesia
-            if language.lower() == "id":
-                if "indonesia" in name_lower or "id_id" in id_lower or "id-id" in id_lower:
-                    selected_voice = voice
-                    break
-            else:
-                if language.lower() in name_lower or language.lower() in id_lower:
-                    selected_voice = voice
-                    break
+    def _speak():
+        with _tts_lock:
+            try:
+                if status_callback:
+                    status_callback("speaking")
+                ws_manager.broadcast_threadsafe("tts_status", {"status": "speaking", "text": text})
 
-        if selected_voice:
-            engine.setProperty('voice', selected_voice['id'])
-            print(f"Menggunakan suara: {selected_voice['name']}")
-        else:
-            print(f"\n[Peringatan] Suara untuk bahasa '{language}' tidak ditemukan di Windows Anda.")
-            print("=> Pastikan Anda sudah mengunduh suara Bahasa Indonesia di Settings Windows Anda.")
-            # Default ke suara pertama yang tersedia jika gagal menemukan
-            default_voices = engine.getProperty('voices')
-            if default_voices:
-                engine.setProperty('voice', default_voices[0].id)
-                print(f"Menggunakan suara default: {default_voices[0].name}")
+                engine = pyttsx3.init()
+                engine.setProperty('rate', rate)
+                engine.setProperty('volume', volume)
 
-        # Jalankan pembacaan teks
-        engine.say(text)
-        engine.runAndWait()
+                voices = get_available_voices()
+                selected_voice = None
+                
+                for voice in voices:
+                    name_lower = voice['name'].lower()
+                    id_lower = voice['id'].lower()
+                    if language.lower() == "id":
+                        if "indonesia" in name_lower or "id_id" in id_lower or "id-id" in id_lower:
+                            selected_voice = voice
+                            break
+                    else:
+                        if language.lower() in name_lower or language.lower() in id_lower:
+                            selected_voice = voice
+                            break
 
-    except Exception as e:
-        print(f"Terjadi kesalahan: {e}")
+                if selected_voice:
+                    engine.setProperty('voice', selected_voice['id'])
+                else:
+                    default_voices = engine.getProperty('voices')
+                    if default_voices:
+                        engine.setProperty('voice', default_voices[0].id)
+
+                engine.say(text)
+                engine.runAndWait()
+
+                if status_callback:
+                    status_callback("finished")
+                ws_manager.broadcast_threadsafe("tts_status", {"status": "finished"})
+
+            except Exception as e:
+                print(f"[TTS Error] {e}")
+                if status_callback:
+                    status_callback(f"error: {str(e)}")
+                ws_manager.broadcast_threadsafe("tts_status", {"status": "error", "error": str(e)})
+
+    # Jalankan TTS di thread terpisah agar tidak memblokir event loop
+    threading.Thread(target=_speak, daemon=True).start()
 
 if __name__ == "__main__":
     teks = input("Masukkan teks yang ingin dibacakan: ")

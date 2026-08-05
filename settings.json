@@ -1,0 +1,18 @@
+{
+  "ai_model": "gemini-3-flash-preview",
+  "language": "id-ID",
+  "tts": {
+    "enabled": true,
+    "rate": 170,
+    "volume": 1.0,
+    "language": "id"
+  },
+  "wake_word": {
+    "enabled": true,
+    "target_models": [
+      "D:\\pribadi\\Projects\\pet-assisten\\env_asisten\\lib\\site-packages\\openwakeword\\resources/models/hey_jarvis_v0.1.onnx",
+      "D:\\pribadi\\Projects\\pet-assisten\\env_asisten\\lib\\site-packages\\openwakeword\\resources/models/alexa_v0.1.onnx"
+    ],
+    "threshold": 0.5
+  }
+}
