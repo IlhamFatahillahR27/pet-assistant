@@ -1,19 +1,25 @@
+import threading
 import speech_recognition as sr
 import gemini_brain
+import tts
 
-def speech_to_text(language="id-ID", timeout=5, phrase_time_limit=10, update_status_callback=None, adjust_duration=0.5):
+def speech_to_text(language="id-ID", timeout=5, phrase_time_limit=30, update_status_callback=None, adjust_duration=0.5):
     """
     Merekam suara dari mikrofon dan mengubahnya menjadi teks menggunakan Google Speech Recognition.
     
     :param language: Kode bahasa target (default 'id-ID' untuk Bahasa Indonesia)
     :param timeout: Durasi tunggu (detik) sebelum mulai berbicara
-    :param phrase_time_limit: Durasi maksimal (detik) untuk satu frasa bicara
+    :param phrase_time_limit: Durasi maksimal (detik) untuk satu frasa bicara (diperpanjang agar tidak terpotong)
     :param update_status_callback: Callback function untuk memperbarui status di UI
     :param adjust_duration: Durasi penyesuaian kebisingan sekitar (detik), set ke 0 untuk menonaktifkan
     :return: Teks hasil pengenalan suara atau None jika gagal
     """
     # Inisialisasi recognizer
     recognizer = sr.Recognizer()
+    
+    # Pengaturan agar perekaman tidak cepat berhenti saat pengguna berhenti sejenak / menjelaskan
+    recognizer.pause_threshold = 2.0  # Jeda nafas 2 detik sebelum dianggap selesai bicara (default bawaan 0.8s)
+    recognizer.dynamic_energy_threshold = True  # Adaptif terhadap kebisingan ruangan
     
     # Gunakan mikrofon default sebagai input audio
     try:
@@ -60,16 +66,16 @@ def speech_to_text(language="id-ID", timeout=5, phrase_time_limit=10, update_sta
             update_status_callback(f"Error: {str(e)}")
         return None
 
-def process_voice_command(update_gui_callback=None, update_status_callback=None, adjust_duration=0.5):
+def process_voice_command(update_gui_callback=None, update_status_callback=None, adjust_duration=0.5, enable_tts=True, tts_rate=150):
     """
-    Mengambil input suara, mengirim ke Gemini, memperbarui GUI.
+    Mengambil input suara, mengirim ke Gemini, memperbarui GUI, dan menyuarakan jawaban (TTS).
     """
     # 1. Dapatkan teks dari suara
     prompt_text = speech_to_text(language="id-ID", update_status_callback=update_status_callback, adjust_duration=adjust_duration)
     if not prompt_text:
         return None
     
-    # Update input user di GUI (Task 1)
+    # Update input user di GUI
     if update_gui_callback:
         update_gui_callback("Anda", prompt_text)
         
@@ -79,10 +85,19 @@ def process_voice_command(update_gui_callback=None, update_status_callback=None,
     
     response_text = gemini_brain.send_prompt_request(prompt_text)
     
-    # Update jawaban Gemini di GUI (Task 1)
+    # Update jawaban Gemini di GUI
     if update_gui_callback:
         update_gui_callback("Asisten", response_text)
         
+    # 3. Bacakan jawaban menggunakan TTS jika diaktifkan
+    if enable_tts and response_text:
+        if update_status_callback:
+            update_status_callback("🔊 Membacakan respon...")
+        try:
+            tts.text_to_speech(response_text, rate=tts_rate, language="id")
+        except Exception as e:
+            print(f"[TTS Error] {e}")
+            
     return response_text
 
 if __name__ == "__main__":

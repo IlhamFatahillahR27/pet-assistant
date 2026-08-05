@@ -1,6 +1,7 @@
 import tkinter as tk
 import threading
 from stt import process_voice_command
+from wake_word_listener import WakeWordListener
 
 class RobotApp:
     def __init__(self, root):
@@ -13,6 +14,7 @@ class RobotApp:
         self.expanded_width = 450
         self.expanded_height = 380
         self.collapsed_width = 120
+        self.is_processing_voice = False
         
         # Remove window decorations (frameless)
         self.root.overrideredirect(True)
@@ -55,22 +57,31 @@ class RobotApp:
         self.resize_top.bind("<Button-1>", self.start_resize_top)
         self.resize_top.bind("<B1-Motion>", self.do_resize_top)
 
+        # State variables Pengaturan
+        self.tts_enabled = tk.BooleanVar(value=True)
+        self.wake_word_enabled = tk.BooleanVar(value=True)
+        self.tts_rate_var = tk.IntVar(value=160)
+        self.current_view = "chat"  # "chat" atau "settings"
+
         # Header Frame for chat panel
         self.header_frame = tk.Frame(self.chat_frame, bg="#1e1e2e")
         self.header_frame.pack(fill=tk.X, pady=(10, 5), padx=10)
 
         self.header_label = tk.Label(
             self.header_frame, 
-            text="🐈 Pet Assistant Chat", 
+            text="🐈 Pet Assistant", 
             fg="#cdd6f4", 
             bg="#1e1e2e", 
             font=("Segoe UI", 11, "bold")
         )
         self.header_label.pack(side=tk.LEFT)
 
-        # Reset button
+        # Header Action Buttons (Reset & Settings)
+        self.header_buttons_frame = tk.Frame(self.header_frame, bg="#1e1e2e")
+        self.header_buttons_frame.pack(side=tk.RIGHT)
+
         self.reset_button = tk.Button(
-            self.header_frame,
+            self.header_buttons_frame,
             text="🔄 Reset",
             bg="#f38ba8", # Pastel red/pink from Catppuccin Mocha
             fg="#11111b",
@@ -78,15 +89,36 @@ class RobotApp:
             activebackground="#f9e2af",
             activeforeground="#11111b",
             bd=0,
-            padx=8,
+            padx=6,
             pady=2,
             command=self.reset_chat
         )
-        self.reset_button.pack(side=tk.RIGHT)
+        self.reset_button.pack(side=tk.LEFT, padx=(0, 4))
+
+        self.settings_button = tk.Button(
+            self.header_buttons_frame,
+            text="⚙️",
+            bg="#89b4fa",
+            fg="#11111b",
+            font=("Segoe UI", 9, "bold"),
+            activebackground="#b4befe",
+            activeforeground="#11111b",
+            bd=0,
+            padx=8,
+            pady=1,
+            command=self.toggle_view_mode
+        )
+        self.settings_button.pack(side=tk.LEFT)
+
+        # -------------------------------------------------------------
+        # MAIN CHAT VIEW CONTAINER
+        # -------------------------------------------------------------
+        self.main_chat_container = tk.Frame(self.chat_frame, bg='#1e1e2e')
+        self.main_chat_container.pack(fill=tk.BOTH, expand=True)
 
         # Chat history display
         self.chat_history = tk.Text(
-            self.chat_frame, 
+            self.main_chat_container, 
             bg="#181825", 
             fg="#cdd6f4", 
             insertbackground="white", 
@@ -99,18 +131,22 @@ class RobotApp:
         )
         self.chat_history.pack(padx=10, pady=5, fill=tk.BOTH, expand=True)
 
+        # Controls & Status Frame
+        self.controls_frame = tk.Frame(self.main_chat_container, bg='#1e1e2e')
+        self.controls_frame.pack(fill=tk.X, padx=10, pady=(2, 2))
+
         # Status indicator
         self.status_label = tk.Label(
-            self.chat_frame, 
+            self.controls_frame, 
             text="Status: Idle", 
             fg="#a6adc8", 
             bg="#1e1e2e", 
             font=("Segoe UI", 9, "italic")
         )
-        self.status_label.pack(pady=(2, 5), padx=10, anchor="w")
+        self.status_label.pack(side=tk.LEFT, anchor="w")
 
         # Input Frame for typing queries
-        self.input_frame = tk.Frame(self.chat_frame, bg='#1e1e2e')
+        self.input_frame = tk.Frame(self.main_chat_container, bg='#1e1e2e')
         self.input_frame.pack(padx=10, pady=5, fill=tk.X)
         
         # Text Entry field
@@ -142,7 +178,7 @@ class RobotApp:
 
         # Speak Button
         self.mic_button = tk.Button(
-            self.chat_frame, 
+            self.main_chat_container, 
             text="🎤 Tanya Asisten", 
             bg="#89b4fa", 
             fg="#11111b", 
@@ -155,6 +191,105 @@ class RobotApp:
             command=self.start_voice_thread
         )
         self.mic_button.pack(padx=10, pady=(5, 10), fill=tk.X)
+
+        # -------------------------------------------------------------
+        # DEDICATED SETTINGS CONTAINER (Terpisah)
+        # -------------------------------------------------------------
+        self.settings_container = tk.Frame(self.chat_frame, bg='#181825', bd=0)
+
+        # Title Settings Header
+        self.settings_header_label = tk.Label(
+            self.settings_container,
+            text="⚙️ Panel Pengaturan",
+            fg="#f9e2af",
+            bg="#181825",
+            font=("Segoe UI", 11, "bold")
+        )
+        self.settings_header_label.pack(pady=(12, 10), padx=15, anchor="w")
+
+        # Inner frame for options
+        self.options_frame = tk.Frame(self.settings_container, bg='#1e1e2e', bd=1, relief=tk.SOLID)
+        self.options_frame.pack(fill=tk.BOTH, expand=True, padx=12, pady=(0, 10))
+
+        # Setting 1: Membacakan Respon (TTS)
+        self.tts_chk = tk.Checkbutton(
+            self.options_frame,
+            text="🔊 Membacakan Respon AI (TTS)",
+            variable=self.tts_enabled,
+            bg="#1e1e2e",
+            fg="#cdd6f4",
+            selectcolor="#181825",
+            activebackground="#1e1e2e",
+            activeforeground="#a6e3a1",
+            font=("Segoe UI", 9, "bold")
+        )
+        self.tts_chk.pack(anchor="w", padx=12, pady=(12, 6))
+
+        # Setting 2: Wake Word Detection
+        self.wake_word_chk = tk.Checkbutton(
+            self.options_frame,
+            text="👂 Wake Word (Hey Jarvis / Alexa)",
+            variable=self.wake_word_enabled,
+            command=self.toggle_wake_word,
+            bg="#1e1e2e",
+            fg="#cdd6f4",
+            selectcolor="#181825",
+            activebackground="#1e1e2e",
+            activeforeground="#a6e3a1",
+            font=("Segoe UI", 9, "bold")
+        )
+        self.wake_word_chk.pack(anchor="w", padx=12, pady=6)
+
+        # Setting 3: Kecepatan Suara TTS Slider
+        self.rate_label = tk.Label(
+            self.options_frame,
+            text="🎚️ Kecepatan Suara (Rate):",
+            fg="#a6adc8",
+            bg="#1e1e2e",
+            font=("Segoe UI", 9)
+        )
+        self.rate_label.pack(anchor="w", padx=12, pady=(10, 2))
+
+        self.rate_scale = tk.Scale(
+            self.options_frame,
+            from_=100,
+            to=220,
+            orient=tk.HORIZONTAL,
+            variable=self.tts_rate_var,
+            bg="#1e1e2e",
+            fg="#cdd6f4",
+            troughcolor="#181825",
+            highlightthickness=0,
+            bd=0
+        )
+        self.rate_scale.pack(fill=tk.X, padx=12, pady=(0, 10))
+
+        # Info card Engine
+        self.engine_info = tk.Label(
+            self.options_frame,
+            text="Engine: openWakeWord 0.6.0 (Free & Offline)\nGoogle Gemini AI API",
+            fg="#6c7086",
+            bg="#1e1e2e",
+            font=("Segoe UI", 8, "italic"),
+            justify=tk.LEFT
+        )
+        self.engine_info.pack(anchor="w", padx=12, pady=(5, 12))
+
+        # Back Button to return to Chat
+        self.back_button = tk.Button(
+            self.settings_container,
+            text="🔙 Kembali ke Chat",
+            bg="#89b4fa",
+            fg="#11111b",
+            font=("Segoe UI", 9, "bold"),
+            activebackground="#b4befe",
+            activeforeground="#11111b",
+            bd=0,
+            padx=10,
+            pady=5,
+            command=self.show_chat_view
+        )
+        self.back_button.pack(fill=tk.X, padx=12, pady=(0, 10))
 
         # Load animated GIF
         self.img_path = "orange-cat.gif"
@@ -193,9 +328,6 @@ class RobotApp:
         self.label.bind("<B1-Motion>", self.do_move)
         self.label.bind("<ButtonRelease-1>", self.stop_move)
         
-        # Binding for exit (Esc key)
-        self.root.bind("<Escape>", lambda e: self.root.destroy())
-
         # Start animation loop
         self.update_animation()
 
@@ -217,6 +349,20 @@ class RobotApp:
         
         # Lift cat frame to top visual layer
         self.cat_frame.lift()
+
+        # Inisialisasi WakeWordListener
+        self.wake_listener = WakeWordListener(
+            callback=self.on_wake_word_triggered,
+            target_models=['hey_jarvis', 'alexa'],
+            threshold=0.5
+        )
+        if self.wake_word_enabled.get():
+            self.wake_listener.start()
+            self.update_status("Mendengarkan Wake Word...")
+
+        # Binding untuk menutup aplikasi dengan bersih
+        self.root.bind("<Escape>", lambda e: self.on_close())
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def update_animation(self):
         """Cycle through GIF frames."""
@@ -335,12 +481,44 @@ class RobotApp:
         # Process request in a separate thread to keep UI responsive
         threading.Thread(target=self.run_text_interaction, args=(query,), daemon=True).start()
 
+    def toggle_view_mode(self):
+        """Beralih antara tampilan Chat utama dan Panel Pengaturan Terpisah."""
+        if self.current_view == "chat":
+            self.show_settings_view()
+        else:
+            self.show_chat_view()
+
+    def show_settings_view(self):
+        """Menampilkan Panel Pengaturan Terpisah."""
+        self.main_chat_container.pack_forget()
+        self.settings_container.pack(fill=tk.BOTH, expand=True)
+        self.header_label.config(text="⚙️ Pengaturan")
+        self.settings_button.config(text="💬", bg="#a6e3a1")
+        self.current_view = "settings"
+
+    def show_chat_view(self):
+        """Kembali ke Tampilan Chat Utama."""
+        self.settings_container.pack_forget()
+        self.main_chat_container.pack(fill=tk.BOTH, expand=True)
+        self.header_label.config(text="🐈 Pet Assistant")
+        self.settings_button.config(text="⚙️", bg="#89b4fa")
+        self.current_view = "chat"
+
     def run_text_interaction(self, query):
         try:
             self.update_status("🤖 Berpikir...")
             import gemini_brain
+            import tts
             response_text = gemini_brain.send_prompt_request(query)
             self.update_chat("Asisten", response_text)
+
+            # Jika TTS diaktifkan di Pengaturan, bacakan responnya
+            if self.tts_enabled.get() and response_text:
+                self.update_status("🔊 Membacakan respon...")
+                try:
+                    tts.text_to_speech(response_text, rate=self.tts_rate_var.get(), language="id")
+                except Exception as tts_err:
+                    print(f"[TTS Error] {tts_err}")
         except Exception as e:
             self.update_chat("Sistem Error", str(e))
         finally:
@@ -349,25 +527,90 @@ class RobotApp:
             self.root.after(0, lambda: self.mic_button.config(state=tk.NORMAL))
             self.update_status("Idle")
 
+    def toggle_wake_word(self):
+        """Mengaktifkan atau mematikan fitur Wake Word di latar belakang."""
+        if self.wake_word_enabled.get():
+            self.wake_listener.start()
+            self.update_status("Mendengarkan Wake Word...")
+        else:
+            self.wake_listener.stop()
+            self.update_status("Wake Word Dimatikan.")
+
+    def on_wake_word_triggered(self, model_name):
+        """Callback saat kata pemicu terdeteksi dari background listener."""
+        if self.is_processing_voice:
+            return
+            
+        print(f"[UI] Wake Word '{model_name}' memicu perekaman otomatis!")
+        # Jalankan pembaruan UI di main thread
+        self.root.after(0, self._safe_wake_word_triggered, model_name)
+
+    def _safe_wake_word_triggered(self, model_name):
+        # Hentikan sementara listener agar tidak bentrok akses PyAudio
+        self.wake_listener.stop()
+        
+        # Ubah otomatis state dan warna tombol mic
+        self.mic_button.config(
+            bg="#a6e3a1",  # Hijau aktif
+            fg="#11111b",
+            text=f"🎙️ Terpemicu ({model_name})!",
+            state=tk.DISABLED
+        )
+        self.send_button.config(state=tk.DISABLED)
+        self.update_status(f"🎙️ Kata Pemicu '{model_name}' Terdeteksi!")
+        
+        # Jalankan alur perekaman suara
+        threading.Thread(target=self.run_voice_interaction, daemon=True).start()
+
     def start_voice_thread(self):
-        # Disable buttons to prevent multiple simultaneous processes
-        self.mic_button.config(state=tk.DISABLED)
+        if self.is_processing_voice:
+            return
+            
+        # Hentikan sementara listener saat mikrofon digunakan STT
+        if self.wake_listener:
+            self.wake_listener.stop()
+            
+        # Ubah visual tombol mic
+        self.mic_button.config(
+            bg="#a6e3a1",
+            fg="#11111b",
+            text="🎙️ Mendengarkan...",
+            state=tk.DISABLED
+        )
         self.send_button.config(state=tk.DISABLED)
         threading.Thread(target=self.run_voice_interaction, daemon=True).start()
 
     def run_voice_interaction(self):
+        self.is_processing_voice = True
         try:
             process_voice_command(
                 update_gui_callback=self.update_chat,
                 update_status_callback=self.update_status,
-                adjust_duration=0.5  # Faster response
+                adjust_duration=0.5,
+                enable_tts=self.tts_enabled.get(),
+                tts_rate=self.tts_rate_var.get()
             )
         except Exception as e:
             self.update_chat("Sistem Error", str(e))
         finally:
-            # Re-enable voice button, send button, and reset status
-            self.root.after(0, lambda: self.mic_button.config(state=tk.NORMAL))
-            self.root.after(0, lambda: self.send_button.config(state=tk.NORMAL))
+            self.is_processing_voice = False
+            # Kembalikan tampilan tombol mic dan status ke normal
+            self.root.after(0, self._reset_mic_button_ui)
+
+    def _reset_mic_button_ui(self):
+        self.mic_button.config(
+            bg="#89b4fa",  # Biru pastel awal
+            fg="#11111b",
+            text="🎤 Tanya Asisten",
+            state=tk.NORMAL
+        )
+        self.send_button.config(state=tk.NORMAL)
+        
+        # Jalankan kembali listener jika opsi aktif
+        if self.wake_word_enabled.get():
+            self.wake_listener.start()
+            self.update_status("Mendengarkan Wake Word...")
+        else:
             self.update_status("Idle")
 
     def reset_chat(self):
@@ -388,6 +631,13 @@ class RobotApp:
             self.query_entry.delete(0, tk.END)
         except Exception as e:
             self.update_chat("Sistem Error", f"Gagal mereset chat: {e}")
+
+    def on_close(self):
+        """Menghentikan thread dan menutup aplikasi secara elegan."""
+        print("[System] Mematikan aplikasi...")
+        if hasattr(self, 'wake_listener') and self.wake_listener:
+            self.wake_listener.stop()
+        self.root.destroy()
 
 if __name__ == "__main__":
     root = tk.Tk()
