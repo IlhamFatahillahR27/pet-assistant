@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from settings_manager import settings_manager
+from user_memory import user_memory_manager
 from ws_manager import ws_manager
 import gemini_brain
 import stt
@@ -75,6 +76,10 @@ class SettingsUpdateRequest(BaseModel):
     tts: Optional[Dict[str, Any]] = None
     wake_word: Optional[Dict[str, Any]] = None
 
+class MemoryCreateRequest(BaseModel):
+    fact: str
+    category: Optional[str] = "general"
+
 # REST Endpoints
 
 @app.get("/health", tags=["Health"])
@@ -97,6 +102,37 @@ async def update_settings(payload: SettingsUpdateRequest):
     # Broadcast perubahan settings ke seluruh WebSocket client
     await ws_manager.broadcast("settings_updated", updated)
     return {"status": "success", "settings": updated}
+
+# Memory Endpoints
+@app.get("/api/memories", tags=["Memory"])
+def get_memories():
+    return {"memories": user_memory_manager.get_all_memories()}
+
+@app.post("/api/memories", tags=["Memory"])
+async def add_memory(req: MemoryCreateRequest):
+    if not req.fact.strip():
+        raise HTTPException(status_code=400, detail="Fakta memori tidak boleh kosong")
+    
+    new_mem = user_memory_manager.add_memory(req.fact, req.category or "general")
+    all_mems = user_memory_manager.get_all_memories()
+    await ws_manager.broadcast("memory_updated", all_mems)
+    return {"status": "success", "memory": new_mem, "memories": all_mems}
+
+@app.delete("/api/memories/{memory_id}", tags=["Memory"])
+async def delete_memory(memory_id: str):
+    success = user_memory_manager.delete_memory(memory_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Memori tidak ditemukan")
+    all_mems = user_memory_manager.get_all_memories()
+    await ws_manager.broadcast("memory_updated", all_mems)
+    return {"status": "deleted", "memory_id": memory_id, "memories": all_mems}
+
+@app.delete("/api/memories", tags=["Memory"])
+async def clear_all_memories():
+    user_memory_manager.clear_all_memories()
+    all_mems = user_memory_manager.get_all_memories()
+    await ws_manager.broadcast("memory_updated", all_mems)
+    return {"status": "cleared", "memories": []}
 
 @app.post("/api/chat", tags=["AI Chat"])
 async def chat_with_gemini(req: ChatRequest):
@@ -154,13 +190,14 @@ def stop_wakeword():
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await ws_manager.connect(websocket)
-    # Kirim status koneksi & settings saat ini ke client baru
+    # Kirim status koneksi, settings, dan memories saat ini ke client baru
     await ws_manager.send_personal_message(
         {
             "event": "connected",
             "data": {
                 "message": "Terhubung ke Pet Assistant WebSocket Server",
-                "settings": settings_manager.get_settings()
+                "settings": settings_manager.get_settings(),
+                "memories": user_memory_manager.get_all_memories()
             }
         },
         websocket

@@ -91,3 +91,53 @@ export async function stopWakeWord() {
     return null;
   }
 }
+
+export async function fetchMemories() {
+  try {
+    const res = await fetch(`${BASE_URL}/api/memories`);
+    const data = await res.json();
+    return data.memories || [];
+  } catch (err) {
+    console.error('Fetch memories error:', err);
+    return [];
+  }
+}
+
+export async function addMemory(fact, category = 'general') {
+  try {
+    const res = await fetch(`${BASE_URL}/api/memories`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fact, category }),
+    });
+    return await res.json();
+  } catch (err) {
+    console.error('Add memory error:', err);
+    return null;
+  }
+}
+
+export async function deleteMemory(memoryId) {
+  try {
+    const res = await fetch(`${BASE_URL}/api/memories/${memoryId}`, {
+      method: 'DELETE',
+    });
+    return await res.json();
+  } catch (err) {
+    console.error('Delete memory error:', err);
+    return null;
+  }
+}
+
+export async function clearMemories() {
+  try {
+    const res = await fetch(`${BASE_URL}/api/memories`, {
+      method: 'DELETE',
+    });
+    return await res.json();
+  } catch (err) {
+    console.error('Clear memories error:', err);
+    return null;
+  }
+}
+

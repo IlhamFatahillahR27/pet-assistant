@@ -1,10 +1,9 @@
 import React from 'react';
-import { RotateCcw, Settings, MessageSquare } from 'lucide-react';
+import { RotateCcw, Settings, MessageSquare, Brain } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 
-export default function Header({ currentView, toggleView, onReset }) {
+export default function Header({ currentView, onSelectView, onReset }) {
   const handleDrag = async (e) => {
-    // Only drag on left click and when not clicking on action buttons
     if (e.button === 0 && !e.target.closest('.header-actions')) {
       try {
         const appWindow = getCurrentWindow();
@@ -29,19 +28,30 @@ export default function Header({ currentView, toggleView, onReset }) {
           title="Reset Chat Session"
         >
           <RotateCcw size={13} />
-          <span>Reset</span>
         </button>
 
         <button
-          className={`btn-header btn-toggle-view ${currentView === 'settings' ? 'active' : ''}`}
-          onClick={toggleView}
-          title={currentView === 'chat' ? 'Buka Pengaturan' : 'Kembali ke Chat'}
+          className={`btn-header ${currentView === 'chat' ? 'active' : ''}`}
+          onClick={() => onSelectView('chat')}
+          title="Tampilan Chat"
         >
-          {currentView === 'chat' ? (
-            <Settings size={14} />
-          ) : (
-            <MessageSquare size={14} />
-          )}
+          <MessageSquare size={13} />
+        </button>
+
+        <button
+          className={`btn-header ${currentView === 'memory' ? 'active' : ''}`}
+          onClick={() => onSelectView('memory')}
+          title="Memori & Habit AI"
+        >
+          <Brain size={13} />
+        </button>
+
+        <button
+          className={`btn-header ${currentView === 'settings' ? 'active' : ''}`}
+          onClick={() => onSelectView('settings')}
+          title="Pengaturan"
+        >
+          <Settings size={13} />
         </button>
       </div>
     </div>

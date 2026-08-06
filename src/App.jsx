@@ -3,14 +3,25 @@ import Header from './components/Header';
 import PetWidget from './components/PetWidget';
 import ChatPanel from './components/ChatPanel';
 import SettingsPanel from './components/SettingsPanel';
+import MemoryPanel from './components/MemoryPanel';
 import { wsClient } from './services/websocket';
-import { fetchSettings, updateSettings, sendChatMessage, triggerSTT } from './services/api';
+import {
+  fetchSettings,
+  updateSettings,
+  sendChatMessage,
+  triggerSTT,
+  fetchMemories,
+  addMemory,
+  deleteMemory,
+  clearMemories,
+} from './services/api';
 import { getCurrentWindow, LogicalPosition, currentMonitor } from '@tauri-apps/api/window';
 
 export default function App() {
-  const [currentView, setCurrentView] = useState('chat'); // 'chat' atau 'settings'
+  const [currentView, setCurrentView] = useState('chat'); // 'chat', 'memory', 'settings'
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [messages, setMessages] = useState([]);
+  const [memories, setMemories] = useState([]);
   const [statusText, setStatusText] = useState('Status: Idle');
   const [isMicActive, setIsMicActive] = useState(false);
   const [settings, setSettings] = useState({
@@ -43,17 +54,24 @@ export default function App() {
     };
     initPosition();
 
-    // 1. Fetch initial settings
+    // 1. Fetch initial settings & memories
     fetchSettings().then((res) => {
       if (res) setSettings(res);
+    });
+
+    fetchMemories().then((mems) => {
+      if (mems) setMemories(mems);
     });
 
     // 2. Connect WebSocket
     wsClient.connect();
 
     // 3. Register WebSocket Event Listeners
-    const unsubConnected = wsClient.on('connected', () => {
+    const unsubConnected = wsClient.on('connected', (data) => {
       setStatusText('Status: Terhubung');
+      if (data?.memories) {
+        setMemories(data.memories);
+      }
     });
 
     const unsubDisconnected = wsClient.on('disconnected', () => {
@@ -111,12 +129,20 @@ export default function App() {
       }
     });
 
+    const unsubMemoryUpdated = wsClient.on('memory_updated', (updatedMemories) => {
+      console.log('[App] Memory updated from backend:', updatedMemories);
+      if (Array.isArray(updatedMemories)) {
+        setMemories(updatedMemories);
+      }
+    });
+
     return () => {
       unsubConnected();
       unsubDisconnected();
       unsubWakeword();
       unsubSTTStatus();
       unsubChatChunk();
+      unsubMemoryUpdated();
     };
   }, []);
 
@@ -154,6 +180,27 @@ export default function App() {
     await updateSettings(newSettings);
   };
 
+  const handleAddMemory = async (fact, category) => {
+    const res = await addMemory(fact, category);
+    if (res && res.memories) {
+      setMemories(res.memories);
+    }
+  };
+
+  const handleDeleteMemory = async (memoryId) => {
+    const res = await deleteMemory(memoryId);
+    if (res && res.memories) {
+      setMemories(res.memories);
+    }
+  };
+
+  const handleClearMemories = async () => {
+    const res = await clearMemories();
+    if (res && res.memories) {
+      setMemories(res.memories);
+    }
+  };
+
   return (
     <div className="app-root">
       <div className={`main-window ${isCollapsed ? 'collapsed-window' : ''}`}>
@@ -161,11 +208,11 @@ export default function App() {
           <div className="chat-container">
             <Header
               currentView={currentView}
-              toggleView={() => setCurrentView((v) => (v === 'chat' ? 'settings' : 'chat'))}
+              onSelectView={(view) => setCurrentView(view)}
               onReset={handleReset}
             />
 
-            {currentView === 'chat' ? (
+            {currentView === 'chat' && (
               <ChatPanel
                 messages={messages}
                 onSendMessage={handleSendMessage}
@@ -173,7 +220,19 @@ export default function App() {
                 statusText={statusText}
                 isMicActive={isMicActive}
               />
-            ) : (
+            )}
+
+            {currentView === 'memory' && (
+              <MemoryPanel
+                memories={memories}
+                onAddMemory={handleAddMemory}
+                onDeleteMemory={handleDeleteMemory}
+                onClearMemories={handleClearMemories}
+                onBackToChat={() => setCurrentView('chat')}
+              />
+            )}
+
+            {currentView === 'settings' && (
               <SettingsPanel
                 settings={settings}
                 onUpdateSettings={handleUpdateSettings}

@@ -3,6 +3,8 @@ import threading
 from dotenv import load_dotenv
 import google.generativeai as genai
 from settings_manager import settings_manager
+from user_memory import user_memory_manager
+from ws_manager import ws_manager
 
 load_dotenv()
 
@@ -29,13 +31,18 @@ Aturan Karakter & Tata Bahasa Wajib:
 """
 
 def get_configured_model():
-    """Membuat objek GenerativeModel menggunakan model yang dikonfigurasi di settings.json."""
+    """Membuat objek GenerativeModel menggunakan model yang dikonfigurasi di settings.json & dinjeksi memori persisten."""
     settings = settings_manager.get_settings()
     model_name = settings.get("ai_model", os.getenv("AI_MODEL_KEY", "gemini-1.5-flash"))
+    
+    # Injeksi konteks memori persisten ke system instruction
+    memory_context = user_memory_manager.get_memory_context_string()
+    full_instruction = CAT_ASSISTANT_SYSTEM_INSTRUCTION + memory_context
+
     try:
         return genai.GenerativeModel(
             model_name=model_name,
-            system_instruction=CAT_ASSISTANT_SYSTEM_INSTRUCTION
+            system_instruction=full_instruction
         )
     except Exception:
         return genai.GenerativeModel(model_name)
@@ -52,6 +59,17 @@ def init_chat_session():
 
 init_chat_session()
 
+def _trigger_memory_extraction(prompt_text: str, response_text: str):
+    """Pemicu ekstraksi memori di background thread & broadcast via WebSocket."""
+    def on_memories_updated(updated_memories):
+        ws_manager.broadcast_threadsafe("memory_updated", updated_memories)
+
+    user_memory_manager.extract_facts_async(
+        prompt_text=prompt_text,
+        response_text=response_text,
+        on_updated_callback=on_memories_updated
+    )
+
 def send_prompt_request(prompt_text: str) -> str:
     """Mengirimkan prompt ke Gemini dan mengembalikan respon lengkap."""
     global chat_session
@@ -64,7 +82,9 @@ def send_prompt_request(prompt_text: str) -> str:
             
         try:
             response = chat_session.send_message(prompt_text)
-            return response.text
+            resp_text = response.text
+            _trigger_memory_extraction(prompt_text, resp_text)
+            return resp_text
         except Exception as e:
             print(f"[Gemini Error] {e}")
             return f"Maaf, sistem mengalami gangguan: {str(e)}"
@@ -100,6 +120,8 @@ def send_prompt_request_stream(prompt_text: str, chunk_callback=None) -> str:
                     full_text += chunk_text
                     if chunk_callback:
                         chunk_callback(chunk_text)
+            
+            _trigger_memory_extraction(prompt_text, full_text)
             return full_text
         except Exception as e:
             print(f"[Gemini Stream Error] {e}")
