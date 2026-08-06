@@ -9,6 +9,12 @@
   },
   "wake_word": {
     "enabled": true,
+    "display_name": "Hi Kitty / Mew Mew / Hey Kitty",
+    "cat_keywords": [
+      "hi kitty",
+      "mew mew",
+      "hey kitty"
+    ],
     "target_models": [
       "D:\\pribadi\\Projects\\pet-assisten\\env_asisten\\lib\\site-packages\\openwakeword\\resources/models/hey_jarvis_v0.1.onnx",
       "D:\\pribadi\\Projects\\pet-assisten\\env_asisten\\lib\\site-packages\\openwakeword\\resources/models/alexa_v0.1.onnx"

@@ -2,6 +2,7 @@ import time
 import threading
 import numpy as np
 import pyaudio
+import speech_recognition as sr
 import openwakeword
 from openwakeword.model import Model
 from settings_manager import settings_manager
@@ -17,26 +18,42 @@ class WakeWordListener:
         self.callback = callback
         settings = settings_manager.get_settings().get("wake_word", {})
         self.target_models = target_models or settings.get("target_models", ['hey_jarvis', 'alexa'])
+        self.cat_keywords = settings.get("cat_keywords", ["hi kitty", "mew mew", "hey kitty"])
         self.threshold = threshold if threshold is not None else settings.get("threshold", 0.5)
         self.is_running = False
         self.thread = None
         self.pyaudio_instance = None
         self.stream = None
         self.oww_model = None
+        self.stop_sr_background = None
+        self.last_trigger_time = 0
+        self.cooldown_seconds = 2.0
 
     def start(self):
-        """Menjalankan pendengar wake word di background thread."""
+        """Menjalankan pendengar wake word (Hybrid OpenWakeWord + Cat Keyword Spotter) di background thread."""
         if self.is_running:
             return
         
         self.is_running = True
         self.thread = threading.Thread(target=self._listen_loop, daemon=True)
         self.thread.start()
-        print("[WakeWord] Listener berhasil dimulai.")
+        
+        # Mulai juga pendengar frasa kata kucing ("Hi Kitty", "Mew Mew", "Hey Kitty")
+        self._start_sr_keyword_listener()
+        print("[WakeWord] Listener Cat-Themed Wake Word berhasil dimulai.")
 
     def stop(self):
         """Menghentikan pendengar wake word."""
         self.is_running = False
+        
+        # Hentikan background listener SpeechRecognition jika ada
+        if self.stop_sr_background:
+            try:
+                self.stop_sr_background(wait_for_stop=False)
+            except Exception:
+                pass
+            self.stop_sr_background = None
+
         if self.stream:
             try:
                 self.stream.stop_stream()
@@ -49,6 +66,66 @@ class WakeWordListener:
             except Exception:
                 pass
         print("[WakeWord] Listener dihentikan.")
+
+    def _trigger_detected(self, trigger_name, score=1.0):
+        """Helper internal untuk memicu event saat kata pemicu terdeteksi."""
+        current_time = time.time()
+        if current_time - self.last_trigger_time > self.cooldown_seconds:
+            self.last_trigger_time = current_time
+            print(f"\n[WakeWord] DETEKSI! Kata Pemicu Kucing: '{trigger_name}' (Skor: {score:.2f})")
+            
+            # Callback lokal jika ada
+            if self.callback:
+                self.callback(trigger_name)
+            
+            # Broadcast via WebSocket ke seluruh client terhubung
+            ws_manager.broadcast_threadsafe(
+                "wakeword_detected",
+                {"model": trigger_name, "score": float(score)}
+            )
+
+    def _start_sr_keyword_listener(self):
+        """Pendengar frasa percakapan langsung untuk frasa 'Hi Kitty', 'Mew Mew', 'Hey Kitty'."""
+        def sr_worker():
+            recognizer = sr.Recognizer()
+            recognizer.pause_threshold = 0.8
+            recognizer.dynamic_energy_threshold = True
+            
+            try:
+                microphone = sr.Microphone()
+                with microphone as source:
+                    recognizer.adjust_for_ambient_noise(source, duration=0.3)
+                
+                def sr_callback(rec, audio):
+                    if not self.is_running:
+                        return
+                    try:
+                        # Coba pengenalan suara Bahasa Inggris & Indonesia
+                        try:
+                            text = rec.recognize_google(audio, language="en-US").lower()
+                        except Exception:
+                            text = rec.recognize_google(audio, language="id-ID").lower()
+                    except Exception:
+                        return
+
+                    # Periksa apakah kalimat mengandung kata pemicu kucing
+                    matched_trigger = None
+                    if "hi kitty" in text or "hai kitty" in text or "hi kiti" in text:
+                        matched_trigger = "Hi Kitty"
+                    elif "hey kitty" in text or "hei kitty" in text or "hey kiti" in text or "kitty" in text or "kiti" in text:
+                        matched_trigger = "Hey Kitty"
+                    elif "mew mew" in text or "mew" in text or "meow" in text or "mio" in text or "miu" in text:
+                        matched_trigger = "Mew Mew"
+
+                    if matched_trigger:
+                        self._trigger_detected(matched_trigger, score=0.95)
+
+                self.stop_sr_background = recognizer.listen_in_background(microphone, sr_callback, phrase_time_limit=3)
+                print("[Keyword Spotter] Pendengar frasa kucing (Hi Kitty / Mew Mew / Hey Kitty) aktif.")
+            except Exception as e:
+                print(f"[Keyword Spotter Error] {e}")
+
+        threading.Thread(target=sr_worker, daemon=True).start()
 
     def _listen_loop(self):
         CHUNK = 1280  # 80ms chunk pada sampel rate 16000 Hz
@@ -69,10 +146,7 @@ class WakeWordListener:
                 frames_per_buffer=CHUNK
             )
 
-            print(f"[WakeWord] Mendengarkan kata pemicu: {self.target_models}...")
-
-            cooldown_seconds = 2.0
-            last_trigger_time = 0
+            print(f"[WakeWord Engine] Mendengarkan pemicu suara kucing...")
 
             while self.is_running:
                 try:
@@ -84,21 +158,17 @@ class WakeWordListener:
                     for model_name, score in self.oww_model.prediction_buffer.items():
                         current_score = score[-1]
                         if current_score >= self.threshold:
-                            current_time = time.time()
-                            if current_time - last_trigger_time > cooldown_seconds:
-                                last_trigger_time = current_time
-                                print(f"\n[WakeWord] DETEKSI! Kata: {model_name} (Skor: {current_score:.2f})")
+                            # Mapping model bawaan openwakeword ke kata pemicu kucing sebagai fallback
+                            display_wakeword = "Hey Kitty"
+                            if "jarvis" in model_name.lower():
+                                display_wakeword = "Hi Kitty"
+                            elif "alexa" in model_name.lower():
+                                display_wakeword = "Hey Kitty"
+                            else:
+                                display_wakeword = "Mew Mew"
                                 
-                                # Callback lokal jika ada
-                                if self.callback:
-                                    self.callback(model_name)
-                                
-                                # Broadcast via WebSocket ke seluruh client terhubung
-                                ws_manager.broadcast_threadsafe(
-                                    "wakeword_detected",
-                                    {"model": model_name, "score": float(current_score)}
-                                )
-                                break
+                            self._trigger_detected(display_wakeword, score=float(current_score))
+                            break
                 except Exception as e:
                     if self.is_running:
                         print(f"[WakeWord Loop Error] {e}")
@@ -138,7 +208,7 @@ if __name__ == "__main__":
 
     listener.start()
     
-    print("Tekan Ctrl+C untuk keluar...")
+    print("Mendengarkan 'Hi Kitty', 'Mew Mew', 'Hey Kitty'... Tekan Ctrl+C untuk keluar...")
     try:
         while True:
             time.sleep(1)

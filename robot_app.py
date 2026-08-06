@@ -228,7 +228,7 @@ class RobotApp:
         # Setting 2: Wake Word Detection
         self.wake_word_chk = tk.Checkbutton(
             self.options_frame,
-            text="👂 Wake Word (Hey Jarvis / Alexa)",
+            text="👂 Wake Word (Hi Kitty / Mew Mew / Hey Kitty)",
             variable=self.wake_word_enabled,
             command=self.toggle_wake_word,
             bg="#1e1e2e",

@@ -16,9 +16,9 @@
   - Slider pengatur kecepatan suara (*TTS Speech Rate Slider*).
 - 👂 **Wake on Command (Wake Word Detection)**:
   - Menggunakan engine **openWakeWord** (100% **Free & Open Source**).
-  - Kata pemicu bawaan: **"Hey Jarvis"** dan **"Alexa"**.
+  - Kata pemicu bertema kucing: **"Hi Kitty"**, **"Mew Mew"**, dan **"Hey Kitty"**.
   - Perekaman suara langsung terpicu otomatis tanpa perlu klik tombol.
-  - **State Tombol Otomatis**: Tombol mikrofon akan otomatis berubah warna menjadi hijau aktif (`🎙️ Terpemicu (hey_jarvis)!`) saat kata pemicu terdeteksi dan kembali normal saat selesai.
+  - **State Tombol Otomatis**: Tombol mikrofon akan otomatis berubah warna menjadi hijau aktif (`🎙️ Terpemicu (Hi Kitty)!`) saat kata pemicu terdeteksi dan kembali normal saat selesai.
   - Opsi toggle `👂 Wake Word` tersedia langsung di Panel Pengaturan.
 - 🧠 **Gemini AI Brain**: Jawaban cerdas dan konteks percakapan yang berkelanjutan menggunakan Google Gemini SDK.
 - 🎙️ **Speech-to-Text (STT) Bebas Pemotongan**:
@@ -78,23 +78,48 @@ pet-assisten/
    ```
    Isi file `.env` dengan API Key dari Google AI Studio:
    ```env
-   GOOGLE_AI_STUDIO_API_KEY=your_gemini_api_key_here
-   AI_MODEL_KEY=gemini-1.5-flash
+   GEMINI_API_KEY=your_gemini_api_key_here
    ```
 
 ---
 
 ## 🚀 Cara Menjalankan Aplikasi
 
-Jalankan skrip utama `robot_app.py`:
+Aplikasi **Pet Assistant** dapat dijalankan dalam dua mode: Mode **Desktop GUI (Tkinter Widget)** dan Mode **Backend API Server (FastAPI & WebSocket)**.
+
+### Mode 1: Menjalankan Desktop GUI (Tkinter Floating Widget)
+
+Mode ini untuk menggunakan asisten virtual berupa widget kucing animasi melayang di desktop Anda:
 
 ```bash
+# 1. Pastikan virtual environment aktif
+env_asisten\Scripts\activate
+
+# 2. Jalankan aplikasi GUI
 python robot_app.py
 ```
 
+### Mode 2: Menjalankan Backend API & WebSocket Server (FastAPI)
+
+Mode ini untuk menjalankan server backend REST API dan WebSocket (siap dihubungkan ke frontend Tauri/React):
+
+```bash
+# 1. Pastikan virtual environment aktif
+env_asisten\Scripts\activate
+
+# 2. Jalankan server FastAPI
+python main.py
+```
+Server akan berjalan di:
+- **Base URL**: `http://127.0.0.1:8000`
+- **Interactive API Documentation (Swagger)**: `http://127.0.0.1:8000/docs`
+- **WebSocket Endpoint**: `ws://127.0.0.1:8000/ws`
+
+---
+
 ### 💡 Panduan Fitur Pengaturan & Suara:
 
-1. **Buka Panel Pengaturan**:
+1. **Buka Panel Pengaturan (GUI)**:
    - Klik tombol **`⚙️`** di header bagian kanan atas.
    - Di sini Anda dapat:
      - Mengaktifkan/mematikan pembacaan suara AI (**`🔊 Membacakan Respon AI (TTS)`**).
@@ -102,9 +127,10 @@ python robot_app.py
      - Mengatur kecepatan bicara (**`🎚️ Kecepatan Suara`**).
    - Klik **`🔙 Kembali ke Chat`** (atau klik ikon `💬`) untuk kembali ke layar percakapan.
 
-2. **Menggunakan Wake Word**:
-   - Pastikan Wake Word aktif. Ucapkan **"Hey Jarvis"** atau **"Alexa"**.
-   - Tombol mikrofon akan otomatis menyala hijau `🎙️ Terpemicu!` dan langsung merekam perintah Anda.
+2. **Menggunakan Wake Word (Cat-Themed)**:
+   - Pastikan opsi Wake Word aktif.
+   - Ucapkan salah satu kata pemicu bertema kucing: **"Hi Kitty"**, **"Mew Mew"**, atau **"Hey Kitty"**.
+   - Tombol mikrofon akan otomatis menyala hijau `🎙️ Terpemicu!` dan langsung merekam suara Anda tanpa perlu mengklik tombol.
 
 3. **Perekaman Manual & Input Teks**:
    - Klik **`🎤 Tanya Asisten`** atau ketik teks pada kolom chat lalu tekan `Enter`.
