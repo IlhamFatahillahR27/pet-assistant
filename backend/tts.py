@@ -61,7 +61,7 @@ def clean_text_for_speech(text: str) -> str:
     clean = re.sub(r'\s+', ' ', clean).strip()
     return clean
 
-def text_to_speech(text: str, rate: int = None, volume: float = None, language: str = None, status_callback=None):
+def text_to_speech(text: str, rate: int = None, volume: float = None, language: str = None, voice_id: str = None, status_callback=None):
     """
     Mengubah teks menjadi suara menggunakan pyttsx3. Thread-safe dengan _tts_lock.
     """
@@ -77,6 +77,7 @@ def text_to_speech(text: str, rate: int = None, volume: float = None, language: 
     rate = rate if rate is not None else settings.get("rate", 160)
     volume = volume if volume is not None else settings.get("volume", 1.0)
     language = language if language is not None else settings.get("language", "id")
+    target_voice_id = voice_id if voice_id is not None else settings.get("voice_id", "")
 
     def _speak():
         with _tts_lock:
@@ -98,22 +99,34 @@ def text_to_speech(text: str, rate: int = None, volume: float = None, language: 
                 engine.setProperty('volume', volume)
 
                 voices = get_available_voices()
-                selected_voice = None
+                selected_voice_id = None
                 
-                for voice in voices:
-                    name_lower = voice['name'].lower()
-                    id_lower = voice['id'].lower()
-                    if language.lower() == "id":
-                        if "indonesia" in name_lower or "id_id" in id_lower or "id-id" in id_lower:
-                            selected_voice = voice
+                # 1. Coba cari spesifik berdasarkan target_voice_id
+                if target_voice_id:
+                    for voice in voices:
+                        if voice['id'] == target_voice_id or voice['name'] == target_voice_id:
+                            selected_voice_id = voice['id']
                             break
-                    else:
-                        if language.lower() in name_lower or language.lower() in id_lower:
-                            selected_voice = voice
-                            break
+                
+                # 2. Fallback jika voice_id tidak ditemukan atau tidak ditentukan: cari berdasarkan bahasa
+                if not selected_voice_id:
+                    for voice in voices:
+                        name_lower = voice['name'].lower()
+                        id_lower = voice['id'].lower()
+                        if language.lower() == "id":
+                            if "indonesia" in name_lower or "id_id" in id_lower or "id-id" in id_lower or "andika" in name_lower or "gadis" in name_lower:
+                                selected_voice_id = voice['id']
+                                break
+                        else:
+                            if language.lower() in name_lower or language.lower() in id_lower:
+                                selected_voice_id = voice['id']
+                                break
 
-                if selected_voice:
-                    engine.setProperty('voice', selected_voice['id'])
+                if selected_voice_id:
+                    try:
+                        engine.setProperty('voice', selected_voice_id)
+                    except Exception as ve:
+                        print(f"[TTS Voice Warning] Gagal set voice {selected_voice_id}: {ve}")
                 else:
                     default_voices = engine.getProperty('voices')
                     if default_voices:

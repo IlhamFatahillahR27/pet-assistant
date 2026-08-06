@@ -11,7 +11,8 @@ DEFAULT_SETTINGS = {
         "enabled": True,
         "rate": 160,
         "volume": 1.0,
-        "language": "id"
+        "language": "id",
+        "voice_id": ""
     },
     "wake_word": {
         "enabled": True,

@@ -3,9 +3,10 @@
   "language": "id-ID",
   "tts": {
     "enabled": true,
-    "rate": 170,
-    "volume": 1.0,
-    "language": "id"
+    "rate": 200,
+    "volume": 0.8,
+    "language": "id",
+    "voice_id": "HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Speech_OneCore\\Voices\\Tokens\\MSTTS_V110_enUS_MarkM"
   },
   "wake_word": {
     "enabled": true,

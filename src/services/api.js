@@ -58,16 +58,51 @@ export async function triggerSTT() {
   }
 }
 
-export async function triggerTTS(text, rate = 170) {
+export async function triggerTTS(text, rate = 170, volume = 1.0, voice_id = null) {
   try {
     const res = await fetch(`${BASE_URL}/api/tts/speak`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, rate }),
+      body: JSON.stringify({ text, rate, volume, voice_id }),
     });
     return await res.json();
   } catch (err) {
     console.error('Trigger TTS error:', err);
+    return null;
+  }
+}
+
+export async function fetchAvailableVoices() {
+  try {
+    const res = await fetch(`${BASE_URL}/api/tts/voices`);
+    const data = await res.json();
+    return data.voices || [];
+  } catch (err) {
+    console.error('Fetch voices error:', err);
+    return [];
+  }
+}
+
+export async function openSpeechSettings() {
+  try {
+    const res = await fetch(`${BASE_URL}/api/system/open-speech-settings`, { method: 'POST' });
+    return await res.json();
+  } catch (err) {
+    console.error('Open speech settings error:', err);
+    return null;
+  }
+}
+
+export async function openExternalUrl(url) {
+  try {
+    const res = await fetch(`${BASE_URL}/api/system/open-browser`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    return await res.json();
+  } catch (err) {
+    console.error('Open external url error:', err);
     return null;
   }
 }

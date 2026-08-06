@@ -69,6 +69,7 @@ class SpeakRequest(BaseModel):
     rate: Optional[int] = None
     volume: Optional[float] = None
     language: Optional[str] = None
+    voice_id: Optional[str] = None
 
 class SettingsUpdateRequest(BaseModel):
     ai_model: Optional[str] = None
@@ -102,6 +103,30 @@ async def update_settings(payload: SettingsUpdateRequest):
     # Broadcast perubahan settings ke seluruh WebSocket client
     await ws_manager.broadcast("settings_updated", updated)
     return {"status": "success", "settings": updated}
+
+class UrlRequest(BaseModel):
+    url: str
+
+# System & OS Settings Endpoints
+@app.post("/api/system/open-speech-settings", tags=["System"])
+def open_speech_settings():
+    """Membuka jendela Windows Speech Settings secara native (ms-settings:speech)."""
+    import os
+    try:
+        os.system("start ms-settings:speech")
+        return {"status": "opened", "message": "Windows Speech Settings dibuka"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gagal membuka settings: {e}")
+
+@app.post("/api/system/open-browser", tags=["System"])
+def open_browser(req: UrlRequest):
+    """Membuka URL di browser bawaan sistem secara otomatis."""
+    import webbrowser
+    try:
+        webbrowser.open(req.url)
+        return {"status": "opened", "url": req.url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gagal membuka browser: {e}")
 
 # Memory Endpoints
 @app.get("/api/memories", tags=["Memory"])
@@ -164,7 +189,8 @@ def trigger_tts(req: SpeakRequest):
         text=req.text,
         rate=req.rate,
         volume=req.volume,
-        language=req.language
+        language=req.language,
+        voice_id=req.voice_id
     )
     return {"status": "speaking_triggered", "text": req.text}
 
