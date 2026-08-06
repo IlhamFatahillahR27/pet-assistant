@@ -1,45 +1,65 @@
 # 🐈 Pet Assistant
 
-**Pet Assistant** adalah aplikasi asisten virtual berbasis Python dengan antarmuka grafis (GUI Tkinter) berbentuk *floating widget* animasi kucing. Aplikasi ini terintegrasi langsung dengan **Google Gemini AI API**, dilengkapi kemampuan kata pemicu suara (*Wake Word Detection*), pengenalan suara (*Speech-To-Text*), pembacaan teks (*Text-To-Speech*), dan **Panel Pengaturan Terpisah**.
+**Pet Assistant** adalah aplikasi asisten virtual berbasis **Tauri v2 + React (Vite)** dan **Backend Python FastAPI** berbentuk *floating widget* animasi kucing melayang di desktop. Aplikasi ini terintegrasi dengan **Google Gemini AI API**, dilengkapi kata pemicu suara (*Wake Word Detection* bertema kucing: **"Hi Kitty"**, **"Mew Mew"**, **"Hey Kitty"**), pengenalan suara (*Speech-To-Text*), pembacaan teks (*Text-To-Speech*), dan **Panel Pengaturan Terpisah (Glassmorphism Dark Theme)**.
 
 ---
 
 ## ✨ Fitur Utama
 
-- 🐱 **Floating Pet Widget**: Tampilan kucing animasi melayang tanpa bingkai (*frameless*) di atas layar komputer.
+- 🐱 **Floating Pet Widget (Tauri v2 + React)**: Tampilan kucing animasi melayang tanpa bingkai (*frameless*), background transparan (*transparent*), dan selalu di atas (*always-on-top*).
 - ⚙️ **Panel Pengaturan Terpisah (Dedicated Settings Panel)**:
-  - Akses melalui tombol ikon `⚙️` di header aplikasi.
-  - Tampilan terpisah yang rapi untuk mengelola pengaturan tanpa mengganggu layar obrolan utama.
-  - Struktur modular yang siap menampung pengaturan baru di masa mendatang.
+  - Akses melalui tombol ikon `⚙️` di header aplikasi React.
+  - Pengelolaan pengaturan terpisah dengan gaya *Dark Glassmorphic UI*.
 - 🔊 **Toggle Membacakan Respon AI (TTS)**:
   - Sakelar ON/OFF untuk menentukan apakah asisten membacakan balasan berupa suara atau hanya teks.
   - Slider pengatur kecepatan suara (*TTS Speech Rate Slider*).
-- 👂 **Wake on Command (Wake Word Detection)**:
-  - Menggunakan engine **openWakeWord** (100% **Free & Open Source**).
+- 👂 **Wake on Command (Cat-Themed Wake Word)**:
   - Kata pemicu bertema kucing: **"Hi Kitty"**, **"Mew Mew"**, dan **"Hey Kitty"**.
-  - Perekaman suara langsung terpicu otomatis tanpa perlu klik tombol.
-  - **State Tombol Otomatis**: Tombol mikrofon akan otomatis berubah warna menjadi hijau aktif (`🎙️ Terpemicu (Hi Kitty)!`) saat kata pemicu terdeteksi dan kembali normal saat selesai.
-  - Opsi toggle `👂 Wake Word` tersedia langsung di Panel Pengaturan.
-- 🧠 **Gemini AI Brain**: Jawaban cerdas dan konteks percakapan yang berkelanjutan menggunakan Google Gemini SDK.
-- 🎙️ **Speech-to-Text (STT) Bebas Pemotongan**:
-  - Perekaman suara melalui Google Speech Recognition.
-  - **Dioptimalkan untuk Penjelasan Panjang**: Batas jeda nafas (`pause_threshold`) ditingkatkan menjadi 2,0 detik dan durasi frasa hingga 30 detik agar percakapan tidak mendadak terputus saat Anda menjelaskan.
+  - **Hybrid Keyword Spotter + openWakeWord Engine**: Perekaman suara terpemicu otomatis saat ucapan terdeteksi.
+  - **State Tombol Otomatis**: Tombol mikrofon menyala hijau aktif (`🎙️ Terpemicu!`) saat kata pemicu terdeteksi.
+- 🧠 **Gemini AI Brain**: Jawaban cerdas dan konteks percakapan berkelanjutan menggunakan Google Gemini SDK.
+- ⚡ **Real-Time WebSocket Sync**: Komunikasi *real-time* antara Frontend React dan Backend Python via WebSocket (`ws://127.0.0.1:8000/ws`).
 
 ---
 
-## 📁 Struktur Proyek
+## 📁 Struktur Proyek (Monorepo Layout)
 
 ```text
 pet-assisten/
-├── robot_app.py           # Aplikasi utama GUI (Tkinter), manajemen view & state UI
-├── wake_word_listener.py  # Modul pendeteksi Wake Word (openWakeWord background listener)
-├── gemini_brain.py        # Modul integrasi AI Google Gemini API & sesi percakapan
-├── stt.py                 # Modul Speech-To-Text (rekam suara -> teks)
-├── tts.py                 # Modul Text-To-Speech (teks -> suara)
-├── orange-cat.gif         # Aset animasi GIF kucing
-├── .env.example           # Template konfigurasi environment variable
-├── README.md              # Dokumentasi penggunaan aplikasi
-└── requirements.txt       # Daftar dependensi modul Python
+├── backend/                      # Python FastAPI Backend Server & Modules
+│   ├── main.py                   # REST API & WebSocket Server
+│   ├── wake_word_listener.py     # Hybrid Cat Wake Word Listener
+│   ├── gemini_brain.py           # Google Gemini AI Integration
+│   ├── stt.py                    # Speech-To-Text Module
+│   ├── tts.py                    # Text-To-Speech Module
+│   ├── settings_manager.py       # Configuration Manager
+│   ├── ws_manager.py             # WebSocket Client Connection Manager
+│   └── settings.json             # Settings configuration file
+├── src/                          # React Frontend Source Code (Vite)
+│   ├── assets/
+│   │   └── orange-cat.gif        # Animasi Widget Kucing
+│   ├── components/
+│   │   ├── PetWidget.jsx         # Floating Cat Avatar Widget Component
+│   │   ├── ChatPanel.jsx         # Chat Messages & Input Panel
+│   │   ├── SettingsPanel.jsx     # Dedicated Settings View Panel
+│   │   └── Header.jsx            # Header & Control Action Buttons
+│   ├── services/
+│   │   ├── websocket.js          # WebSocket Client Service
+│   │   └── api.js                # FastAPI REST API Service
+│   ├── App.jsx                   # React Entry Component & State Manager
+│   ├── App.css                   # Glassmorphism Dark Theme Styling
+│   └── main.jsx                  # React Entry Point
+├── src-tauri/                    # Tauri v2 Desktop Shell & Config
+│   ├── src/
+│   │   ├── main.rs               # Rust Entry Point
+│   │   └── lib.rs                # Tauri App Runner
+│   ├── tauri.conf.json           # Frameless, Transparent & Always-on-Top Config
+│   └── Cargo.toml                # Rust Dependencies
+├── package.json                  # React + Vite + Tauri Dependencies
+├── vite.config.js                # Vite Bundler Config
+├── requirements.txt              # Python Backend Dependencies
+├── README.md                     # Documentation
+└── ROADMAP.md                    # Project Roadmap
 ```
 
 ---
@@ -47,9 +67,10 @@ pet-assisten/
 ## 🛠️ Prasyarat & Instalasi
 
 ### 1. Prasyarat Sistem
+- **Node.js (v18+)** & **npm**
 - **Python 3.8 - 3.11**
+- **Rust / Cargo** (untuk build desktop app via Tauri v2)
 - Mikrofon aktif untuk input suara (*Speech-to-Text* & *Wake Word*).
-- Koneksi Internet untuk mengakses API Google Gemini dan Google STT.
 
 ### 2. Cara Instalasi
 
@@ -59,24 +80,20 @@ pet-assisten/
    cd pet-assisten
    ```
 
-2. **Buat & Aktifkan Virtual Environment:**
+2. **Install Dependensi Python & Frontend:**
    ```bash
-   # Windows
+   # Virtual environment Python
    python -m venv env_asisten
    env_asisten\Scripts\activate
-   ```
 
-3. **Install Dependensi:**
-   ```bash
+   # Install dependensi Python backend
    pip install -r requirements.txt
+
+   # Install dependensi Node.js / React frontend
+   npm install
    ```
 
-4. **Konfigurasi Environment Variable (`.env`):**
-   Salin file `.env.example` menjadi `.env`:
-   ```bash
-   copy .env.example .env
-   ```
-   Isi file `.env` dengan API Key dari Google AI Studio:
+3. **Konfigurasi Environment Variable (`backend/.env`):**
    ```env
    GEMINI_API_KEY=your_gemini_api_key_here
    ```
@@ -85,64 +102,61 @@ pet-assisten/
 
 ## 🚀 Cara Menjalankan Aplikasi
 
-Aplikasi **Pet Assistant** dapat dijalankan dalam dua mode: Mode **Desktop GUI (Tkinter Widget)** dan Mode **Backend API Server (FastAPI & WebSocket)**.
+### Langkah 1: Menjalankan Backend Python Server (Wajib)
 
-### Mode 1: Menjalankan Desktop GUI (Tkinter Floating Widget)
-
-Mode ini untuk menggunakan asisten virtual berupa widget kucing animasi melayang di desktop Anda:
+Jalankan FastAPI & WebSocket Server terlebih dahulu:
 
 ```bash
-# 1. Pastikan virtual environment aktif
+# Aktifkan virtual environment
 env_asisten\Scripts\activate
 
-# 2. Jalankan aplikasi GUI
-python robot_app.py
+# Menjalankan backend server
+python backend/main.py
 ```
-
-### Mode 2: Menjalankan Backend API & WebSocket Server (FastAPI)
-
-Mode ini untuk menjalankan server backend REST API dan WebSocket (siap dihubungkan ke frontend Tauri/React):
-
-```bash
-# 1. Pastikan virtual environment aktif
-env_asisten\Scripts\activate
-
-# 2. Jalankan server FastAPI
-python main.py
-```
-Server akan berjalan di:
-- **Base URL**: `http://127.0.0.1:8000`
-- **Interactive API Documentation (Swagger)**: `http://127.0.0.1:8000/docs`
-- **WebSocket Endpoint**: `ws://127.0.0.1:8000/ws`
+*Server backend berjalan di `http://127.0.0.1:8000` (WebSocket di `ws://127.0.0.1:8000/ws`).*
 
 ---
 
-### 💡 Panduan Fitur Pengaturan & Suara:
+### Langkah 2: Menjalankan Application Frontend / Desktop App
 
-1. **Buka Panel Pengaturan (GUI)**:
-   - Klik tombol **`⚙️`** di header bagian kanan atas.
-   - Di sini Anda dapat:
-     - Mengaktifkan/mematikan pembacaan suara AI (**`🔊 Membacakan Respon AI (TTS)`**).
-     - Mengaktifkan/mematikan kata pemicu (**`👂 Wake Word`**).
-     - Mengatur kecepatan bicara (**`🎚️ Kecepatan Suara`**).
-   - Klik **`🔙 Kembali ke Chat`** (atau klik ikon `💬`) untuk kembali ke layar percakapan.
+Buka terminal baru di direktori `pet-assisten/`:
 
-2. **Menggunakan Wake Word (Cat-Themed)**:
-   - Pastikan opsi Wake Word aktif.
-   - Ucapkan salah satu kata pemicu bertema kucing: **"Hi Kitty"**, **"Mew Mew"**, atau **"Hey Kitty"**.
-   - Tombol mikrofon akan otomatis menyala hijau `🎙️ Terpemicu!` dan langsung merekam suara Anda tanpa perlu mengklik tombol.
+#### Option A: Menjalankan Mode Desktop App (Tauri v2 Floating Window)
+```bash
+npm run tauri dev
+```
 
-3. **Perekaman Manual & Input Teks**:
-   - Klik **`🎤 Tanya Asisten`** atau ketik teks pada kolom chat lalu tekan `Enter`.
+#### Option B: Menjalankan Mode Browser Preview (React Vite)
+```bash
+npm run dev
+```
 
 ---
 
-## ℹ️ Lisensi & Biaya Engine Wake Word
+## 💡 Panduan Fitur Pengaturan & Suara
 
-- Engine **openWakeWord** yang digunakan pada aplikasi ini **100% Free & Open Source (Apache License 2.0)** tanpa perlu pendaftaran, API key, atau biaya berlangganan.
+1. **Menggunakan Wake Word Kucing**:
+   - Ucapkan salah satu kata pemicu: **"Hi Kitty"**, **"Mew Mew"**, atau **"Hey Kitty"**.
+   - Widget akan otomatis mendeteksi suara dan mengaktifkan perekaman jawaban.
+
+2. **Membuka Panel Pengaturan**:
+   - Klik ikon **`⚙️`** di header bagian kanan atas.
+   - Atur sakelar **TTS**, **Wake Word**, atau **Kecepatan Suara**.
+
+---
+
+## 🤖 Antigravity AI Rules & Sesi Obrolan Baru
+
+Proyek ini telah dilengkapi dengan aturan proyek terpusat (*project custom rules*) di [.gemini/rules/pet-assistant-rules.md](file:///D:/pribadi/Projects/pet-assisten/.gemini/rules/pet-assistant-rules.md).
+
+Setiap kali Anda membuka sesi obrolan baru di **Antigravity CLI / IDE**, sistem akan otomatis membaca aturan proyek ini yang mencakup:
+- Arsitektur Monorepo (`backend/`, `src/`, `src-tauri/`).
+- Karakter & Tata Bahasa Anime Manusia Kucing 'Kitty' (Ramah, tanpa Markdown header, direct response).
+- Penanganan mikrofon & jeda pelepasan hardware audio PortAudio Windows.
+- Aturan WebView2 Native Dragging (`-webkit-app-region: drag`).
 
 ---
 
 ## 📜 Lisensi Proyek
 
-Proyek ini dibuat untuk tujuan edukasi dan pengembangan asisten personal.
+Proyek ini dibuat untuk tujuan edukasi dan pengembangan asisten personal desktop modern.
