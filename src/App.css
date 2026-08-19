@@ -7,7 +7,8 @@
   user-select: none;
 }
 
-:root {
+:root,
+.theme-mocha {
   --bg-dark: #181825;
   --bg-card: #1e1e2e;
   --bg-glass: rgba(30, 30, 46, 0.85);
@@ -21,6 +22,58 @@
   --radius-lg: 16px;
   --radius-md: 10px;
   --radius-sm: 6px;
+}
+
+.theme-cyberpunk {
+  --bg-dark: #0b0d17;
+  --bg-card: #12162a;
+  --bg-glass: rgba(14, 18, 36, 0.90);
+  --border-color: rgba(0, 240, 255, 0.25);
+  --text-main: #f0f6fc;
+  --text-sub: #8b949e;
+  --accent-pink: #ff007f;
+  --accent-blue: #00f0ff;
+  --accent-green: #00ff9d;
+  --accent-yellow: #ffe600;
+}
+
+.theme-sakura {
+  --bg-dark: #23141e;
+  --bg-card: #341e2c;
+  --bg-glass: rgba(45, 25, 38, 0.90);
+  --border-color: rgba(255, 182, 193, 0.22);
+  --text-main: #ffeef5;
+  --text-sub: #d4a5b8;
+  --accent-pink: #ff79c6;
+  --accent-blue: #bd93f9;
+  --accent-green: #8be9fd;
+  --accent-yellow: #f1fa8c;
+}
+
+.theme-ocean {
+  --bg-dark: #0a1726;
+  --bg-card: #13243a;
+  --bg-glass: rgba(13, 27, 44, 0.90);
+  --border-color: rgba(88, 166, 255, 0.22);
+  --text-main: #e0e6ed;
+  --text-sub: #7b93af;
+  --accent-pink: #f77f00;
+  --accent-blue: #58a6ff;
+  --accent-green: #48cae4;
+  --accent-yellow: #fcbf49;
+}
+
+.theme-emerald {
+  --bg-dark: #081912;
+  --bg-card: #0f2c1f;
+  --bg-glass: rgba(10, 28, 20, 0.90);
+  --border-color: rgba(46, 160, 67, 0.25);
+  --text-main: #e6edf3;
+  --text-sub: #7ee787;
+  --accent-pink: #d29922;
+  --accent-blue: #56d364;
+  --accent-green: #3fb950;
+  --accent-yellow: #e3b341;
 }
 
 html, body, #root {
@@ -83,6 +136,7 @@ html, body, #root {
   background: rgba(24, 24, 37, 0.6);
   border-bottom: 1px solid var(--border-color);
   cursor: grab;
+  user-select: none;
   -webkit-app-region: drag;
 }
 
@@ -499,6 +553,8 @@ label,
   position: relative;
   display: flex;
   align-items: flex-end;
+  user-select: none;
+  touch-action: none;
   -webkit-app-region: drag;
 }
 
@@ -509,6 +565,8 @@ label,
   display: flex;
   justify-content: center;
   align-items: center;
+  user-select: none;
+  touch-action: none;
   -webkit-app-region: drag;
 }
 
@@ -902,5 +960,242 @@ label,
 .guide-steps strong {
   color: var(--accent-green);
 }
+
+/* =========================================================
+   Phase 6: Settings Tab Switcher, Skin & Theme Customization
+   ========================================================= */
+
+.settings-header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+
+.settings-tab-switcher {
+  display: flex;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  gap: 4px;
+  -webkit-app-region: no-drag;
+}
+
+.tab-btn {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text-sub);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 8px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tab-btn:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tab-btn.active {
+  background: var(--bg-card);
+  color: var(--accent-blue);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.scrollable-tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  max-height: 250px;
+  padding-right: 4px;
+}
+
+.scrollable-tab-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.scrollable-tab-content::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+.setting-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-yellow);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Skin Selector Grid */
+.skin-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.skin-card {
+  background: rgba(24, 24, 37, 0.5);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+}
+
+.skin-card:hover {
+  background: rgba(30, 30, 46, 0.8);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.skin-card.selected {
+  border-color: var(--accent-blue);
+  background: rgba(137, 180, 250, 0.12);
+  box-shadow: 0 0 12px rgba(137, 180, 250, 0.2);
+}
+
+.skin-preview-wrapper {
+  position: relative;
+  width: 54px;
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.skin-preview-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4));
+}
+
+.skin-check-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  color: var(--accent-blue);
+  background: var(--bg-dark);
+  border-radius: 50%;
+  display: flex;
+}
+
+.skin-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.skin-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.skin-desc {
+  font-size: 9px;
+  color: var(--text-sub);
+  line-height: 1.2;
+}
+
+/* Theme Selector List */
+.theme-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.theme-item {
+  background: rgba(24, 24, 37, 0.5);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.theme-item:hover {
+  background: rgba(30, 30, 46, 0.8);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.theme-item.selected {
+  border-color: var(--accent-blue);
+  background: rgba(137, 180, 250, 0.12);
+}
+
+.theme-color-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.theme-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.theme-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-main);
+}
+
+.theme-desc {
+  font-size: 9px;
+  color: var(--text-sub);
+}
+
+.theme-check-icon {
+  color: var(--accent-blue);
+}
+
+/* Cat Frame Sprite */
+.cat-frame-sprite {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.45));
+  transition: transform 0.18s ease;
+  user-select: none;
+  -webkit-user-drag: none;
+  pointer-events: none;
+}
+
+.cat-avatar-wrapper:hover .cat-frame-sprite {
+  transform: scale(1.06);
+}
+
 
 

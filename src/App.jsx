@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Header from './components/Header';
 import PetWidget from './components/PetWidget';
 import ChatPanel from './components/ChatPanel';
@@ -16,6 +16,7 @@ import {
   clearMemories,
 } from './services/api';
 import { getCurrentWindow, LogicalPosition, currentMonitor } from '@tauri-apps/api/window';
+import { listen } from '@tauri-apps/api/event';
 
 export default function App() {
   const [currentView, setCurrentView] = useState('chat'); // 'chat', 'memory', 'settings'
@@ -24,10 +25,45 @@ export default function App() {
   const [memories, setMemories] = useState([]);
   const [statusText, setStatusText] = useState('Status: Idle');
   const [isMicActive, setIsMicActive] = useState(false);
+  const [isAiThinking, setIsAiThinking] = useState(false);
+  const [isAiSpeaking, setIsAiSpeaking] = useState(false);
+  const [isAfkSleeping, setIsAfkSleeping] = useState(false);
+  const [isWindowMoving, setIsWindowMoving] = useState(false);
   const [settings, setSettings] = useState({
-    tts: { enabled: true, rate: 170 },
+    selected_cat: 'cat_01',
+    theme: 'theme-mocha',
+    tts: { enabled: true, rate: 160, volume: 1.0 },
     wake_word: { enabled: true },
   });
+
+  const afkTimerRef = useRef(null);
+  const moveTimerRef = useRef(null);
+
+  // Inactivity timeout handler (45 seconds of idle triggers sleeping pose)
+  const resetAfkTimer = useCallback(() => {
+    setIsAfkSleeping(false);
+    if (afkTimerRef.current) clearTimeout(afkTimerRef.current);
+    afkTimerRef.current = setTimeout(() => {
+      setIsAfkSleeping(true);
+    }, 45000);
+  }, []);
+
+  useEffect(() => {
+    // Reset timer on user interactions
+    const handleUserActivity = () => resetAfkTimer();
+    window.addEventListener('mousemove', handleUserActivity);
+    window.addEventListener('keydown', handleUserActivity);
+    window.addEventListener('click', handleUserActivity);
+
+    resetAfkTimer();
+
+    return () => {
+      if (afkTimerRef.current) clearTimeout(afkTimerRef.current);
+      window.removeEventListener('mousemove', handleUserActivity);
+      window.removeEventListener('keydown', handleUserActivity);
+      window.removeEventListener('click', handleUserActivity);
+    };
+  }, [resetAfkTimer]);
 
   useEffect(() => {
     // 0. Set initial position at bottom-right of the screen
@@ -54,13 +90,40 @@ export default function App() {
     };
     initPosition();
 
+    // 0.1 Listen to window move events in real-time to trigger 'lifted' pose
+    let unlistenMoved = null;
+    let unlistenCustomMove = null;
+    let isMounted = true;
+
+    const handleMovementTrigger = () => {
+      if (!isMounted) return;
+      setIsWindowMoving(true);
+      resetAfkTimer();
+
+      if (moveTimerRef.current) clearTimeout(moveTimerRef.current);
+      moveTimerRef.current = setTimeout(() => {
+        if (isMounted) setIsWindowMoving(false);
+      }, 400);
+    };
+
+    const setupWindowMoveListener = async () => {
+      try {
+        const appWindow = getCurrentWindow();
+        unlistenMoved = await appWindow.onMoved(handleMovementTrigger);
+        unlistenCustomMove = await listen('window-moving', handleMovementTrigger);
+      } catch (err) {
+        console.warn('Tauri move event listener notice:', err);
+      }
+    };
+    setupWindowMoveListener();
+
     // 1. Fetch initial settings & memories
     fetchSettings().then((res) => {
-      if (res) setSettings(res);
+      if (res && isMounted) setSettings((prev) => ({ ...prev, ...res }));
     });
 
     fetchMemories().then((mems) => {
-      if (mems) setMemories(mems);
+      if (mems && isMounted) setMemories(mems);
     });
 
     // 2. Connect WebSocket
@@ -81,27 +144,40 @@ export default function App() {
     const unsubWakeword = wsClient.on('wakeword_detected', (data) => {
       console.log('[App] Wake word terdeteksi:', data);
       setIsMicActive(true);
+      setIsAiThinking(false);
+      setIsAiSpeaking(false);
+      resetAfkTimer();
       setStatusText(`🎙️ Kata Pemicu '${data.model}' Terdeteksi!`);
       triggerSTT();
     });
 
     const unsubSTTStatus = wsClient.on('stt_status', (data) => {
+      resetAfkTimer();
       if (data.status === 'listening') {
         setIsMicActive(true);
+        setIsAiThinking(false);
+        setIsAiSpeaking(false);
         setStatusText('🎙️ Silakan Berbicara...');
       } else if (data.status === 'processing') {
+        setIsMicActive(false);
+        setIsAiThinking(true);
+        setIsAiSpeaking(false);
         setStatusText('🤖 Memproses Suara...');
       } else if (data.status === 'recognized') {
         setIsMicActive(false);
+        setIsAiThinking(true);
         setMessages((prev) => [...prev, { sender: 'Anda', text: data.text }]);
         setStatusText('🤖 Berpikir...');
       } else if (data.status === 'error') {
         setIsMicActive(false);
+        setIsAiThinking(false);
+        setIsAiSpeaking(false);
         setStatusText(`Status: Error (${data.error})`);
       }
     });
 
     const unsubChatChunk = wsClient.on('chat_chunk', (data) => {
+      resetAfkTimer();
       if (data.done) {
         if (data.full_text) {
           setMessages((prev) => {
@@ -111,8 +187,13 @@ export default function App() {
         }
         setStatusText('Status: Idle');
         setIsMicActive(false);
+        setIsAiThinking(false);
+        // Biarkan pose licking aktif sejenak setelah selesai bicara
+        setTimeout(() => setIsAiSpeaking(false), 2000);
       } else if (data.text) {
         setStatusText('🤖 Menjawab...');
+        setIsAiThinking(false);
+        setIsAiSpeaking(true);
         setMessages((prev) => {
           const lastIndex = prev.length - 1;
           if (lastIndex >= 0 && prev[lastIndex].sender === 'Asisten' && prev[lastIndex].isStreaming) {
@@ -137,6 +218,13 @@ export default function App() {
     });
 
     return () => {
+      isMounted = false;
+      if (typeof unlistenMoved === 'function') {
+        unlistenMoved();
+      }
+      if (moveTimerRef.current) {
+        clearTimeout(moveTimerRef.current);
+      }
       unsubConnected();
       unsubDisconnected();
       unsubWakeword();
@@ -144,20 +232,26 @@ export default function App() {
       unsubChatChunk();
       unsubMemoryUpdated();
     };
-  }, []);
+  }, [resetAfkTimer]);
 
   const handleSendMessage = async (text) => {
+    resetAfkTimer();
     setMessages((prev) => [...prev, { sender: 'Anda', text }]);
     setStatusText('🤖 Berpikir...');
+    setIsAiThinking(true);
+    setIsAiSpeaking(false);
 
     // Kirim via WebSocket jika terhubung, fallback ke REST
     if (wsClient.isConnected) {
       wsClient.send('chat', { prompt: text });
     } else {
       const res = await sendChatMessage(text);
+      setIsAiThinking(false);
       if (res && res.response) {
+        setIsAiSpeaking(true);
         setMessages((prev) => [...prev, { sender: 'Asisten', text: res.response }]);
         setStatusText('Status: Idle');
+        setTimeout(() => setIsAiSpeaking(false), 2000);
       } else {
         setStatusText('Status: Error mengirim pesan');
       }
@@ -165,12 +259,16 @@ export default function App() {
   };
 
   const handleStartMic = async () => {
+    resetAfkTimer();
     setIsMicActive(true);
+    setIsAiThinking(false);
+    setIsAiSpeaking(false);
     setStatusText('🎙️ Memulai Perekaman...');
     await triggerSTT();
   };
 
   const handleReset = () => {
+    resetAfkTimer();
     setMessages([]);
     setStatusText('Status: Chat direset');
   };
@@ -181,6 +279,7 @@ export default function App() {
   };
 
   const handleAddMemory = async (fact, category) => {
+    resetAfkTimer();
     const res = await addMemory(fact, category);
     if (res && res.memories) {
       setMemories(res.memories);
@@ -188,6 +287,7 @@ export default function App() {
   };
 
   const handleDeleteMemory = async (memoryId) => {
+    resetAfkTimer();
     const res = await deleteMemory(memoryId);
     if (res && res.memories) {
       setMemories(res.memories);
@@ -195,14 +295,28 @@ export default function App() {
   };
 
   const handleClearMemories = async () => {
+    resetAfkTimer();
     const res = await clearMemories();
     if (res && res.memories) {
       setMemories(res.memories);
     }
   };
 
+  // Determine current cat pose based on application state machine
+  const getCatPose = () => {
+    if (isWindowMoving) return 'lifted';
+    if (isAiSpeaking) return 'licking';
+    if (isAiThinking) return 'sit_backward';
+    if (isMicActive) return 'sit_forward';
+    if (isCollapsed || isAfkSleeping) return 'sleeping';
+    return 'sit_forward';
+  };
+
+  const currentTheme = settings.theme || 'theme-mocha';
+  const currentCatId = settings.selected_cat || 'cat_01';
+
   return (
-    <div className="app-root">
+    <div className={`app-root ${currentTheme}`} data-theme={currentTheme}>
       <div className={`main-window ${isCollapsed ? 'collapsed-window' : ''}`}>
         {!isCollapsed && (
           <div className="chat-container">
@@ -210,6 +324,8 @@ export default function App() {
               currentView={currentView}
               onSelectView={(view) => setCurrentView(view)}
               onReset={handleReset}
+              onStartDrag={() => setIsWindowMoving(true)}
+              onEndDrag={() => setIsWindowMoving(false)}
             />
 
             {currentView === 'chat' && (
@@ -244,8 +360,14 @@ export default function App() {
 
         <PetWidget
           isCollapsed={isCollapsed}
-          onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
-          status={isMicActive ? 'listening' : 'idle'}
+          onToggleCollapse={() => {
+            resetAfkTimer();
+            setIsCollapsed(!isCollapsed);
+          }}
+          catId={currentCatId}
+          currentPose={getCatPose()}
+          isWindowMoving={isWindowMoving}
+          status={isMicActive ? 'listening' : isAiThinking ? 'thinking' : 'idle'}
         />
       </div>
     </div>

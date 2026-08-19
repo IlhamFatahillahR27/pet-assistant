@@ -2,20 +2,29 @@ import React from 'react';
 import { RotateCcw, Settings, MessageSquare, Brain } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 
-export default function Header({ currentView, onSelectView, onReset }) {
+export default function Header({
+  currentView,
+  onSelectView,
+  onReset,
+  onStartDrag,
+  onEndDrag,
+}) {
   const handleDrag = async (e) => {
     if (e.button === 0 && !e.target.closest('.header-actions')) {
+      onStartDrag?.();
       try {
         const appWindow = getCurrentWindow();
         await appWindow.startDragging();
       } catch (err) {
         console.warn('Window drag notice:', err);
+      } finally {
+        onEndDrag?.();
       }
     }
   };
 
   return (
-    <div className="app-header" onMouseDown={handleDrag} data-tauri-drag-region>
+    <div className="app-header" onPointerDown={handleDrag} data-tauri-drag-region>
       <div className="header-title" data-tauri-drag-region>
         <span className="cat-icon">🐈</span>
         <span className="title-text">Pet Assistant</span>
