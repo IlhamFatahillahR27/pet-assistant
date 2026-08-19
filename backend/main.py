@@ -2,6 +2,7 @@ import asyncio
 import threading
 from typing import Dict, Any, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, BackgroundTasks, HTTPException
+from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -9,6 +10,8 @@ from settings_manager import settings_manager
 from user_memory import user_memory_manager
 from ws_manager import ws_manager
 from ai_brain import ai_brain, SUPPORTED_PROVIDERS
+from google_auth_manager import google_auth_manager
+from google_workspace import google_workspace
 import stt
 import tts
 import wake_word_listener
@@ -81,6 +84,7 @@ class SettingsUpdateRequest(BaseModel):
     language: Optional[str] = None
     tts: Optional[Dict[str, Any]] = None
     wake_word: Optional[Dict[str, Any]] = None
+    google_oauth: Optional[Dict[str, Any]] = None
 
 class MemoryCreateRequest(BaseModel):
     fact: str
@@ -94,6 +98,27 @@ class AITestRequest(BaseModel):
     model: Optional[str] = ""
     api_key: Optional[str] = ""
     base_url: Optional[str] = ""
+
+class GoogleConfigRequest(BaseModel):
+    client_id: str
+    client_secret: str
+
+class GoogleCalendarEventCreateRequest(BaseModel):
+    summary: str
+    start: str
+    end: Optional[str] = None
+    description: Optional[str] = ""
+    location: Optional[str] = ""
+
+class GoogleTaskCreateRequest(BaseModel):
+    title: str
+    notes: Optional[str] = ""
+    due: Optional[str] = None
+
+class GoogleSendEmailRequest(BaseModel):
+    to: str
+    subject: str
+    body: str
 
 
 # REST Endpoints
@@ -141,6 +166,251 @@ def get_ollama_models(base_url: Optional[str] = "http://localhost:11434"):
     """Mengambil daftar model AI yang sudah terinstall di Ollama lokal."""
     models = ai_brain.fetch_ollama_local_models(base_url=base_url)
     return {"models": models}
+
+# Google OAuth 2.0 Endpoints
+@app.get("/api/google/status", tags=["Google OAuth & Assistant"])
+def get_google_status():
+    """Mendapatkan status koneksi Google OAuth, profil pengguna, dan scopes."""
+    return google_auth_manager.get_auth_status()
+
+@app.get("/api/google/auth-url", tags=["Google OAuth & Assistant"])
+def get_google_auth_url():
+    """Menghasilkan URL consent login Google OAuth 2.0."""
+    res = google_auth_manager.generate_auth_url()
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error", "Gagal generate auth url"))
+    return res
+
+@app.get("/api/google/oauth/callback", tags=["Google OAuth & Assistant"], response_class=HTMLResponse)
+async def google_oauth_callback(code: Optional[str] = None, error: Optional[str] = None):
+    """Callback redirect URI setelah persetujuan otentikasi Google OAuth 2.0."""
+    if error:
+        return HTMLResponse(
+            content=f"""
+            <!DOCTYPE html>
+            <html lang="id">
+            <head>
+                <meta charset="UTF-8">
+                <title>Otentikasi Gagal - Pet Assistant</title>
+                <style>
+                    body {{ font-family: 'Segoe UI', sans-serif; background: #181825; color: #f38ba8; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }}
+                    .card {{ background: #1e1e2e; border: 1px solid rgba(243, 139, 168, 0.3); border-radius: 16px; padding: 32px; text-align: center; max-width: 420px; box-shadow: 0 8px 32px rgba(0,0,0,0.4); }}
+                    h2 {{ margin-top: 0; }}
+                </style>
+            </head>
+            <body>
+                <div class="card">
+                    <h2>❌ Otentikasi Dibatalkan / Gagal</h2>
+                    <p>{error}</p>
+                    <p style="color: #a6adc8; font-size: 13px;">Silakan tutup tab ini dan coba kembali dari aplikasi Pet Assistant.</p>
+                </div>
+            </body>
+            </html>
+            """,
+            status_code=400
+        )
+
+    if not code:
+        raise HTTPException(status_code=400, detail="Authorization code tidak ditemukan")
+
+    result = google_auth_manager.exchange_code_for_tokens(code)
+    if not result.get("success"):
+        return HTMLResponse(
+            content=f"""
+            <!DOCTYPE html>
+            <html lang="id">
+            <head>
+                <meta charset="UTF-8">
+                <title>Gagal Tukar Token - Pet Assistant</title>
+                <style>
+                    body {{ font-family: 'Segoe UI', sans-serif; background: #181825; color: #f38ba8; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }}
+                    .card {{ background: #1e1e2e; border: 1px solid rgba(243, 139, 168, 0.3); border-radius: 16px; padding: 32px; text-align: center; max-width: 420px; }}
+                </style>
+            </head>
+            <body>
+                <div class="card">
+                    <h2>⚠️ Penukaran Token Gagal</h2>
+                    <p>{result.get('error')}</p>
+                </div>
+            </body>
+            </html>
+            """,
+            status_code=500
+        )
+
+    profile = result.get("profile", {})
+    user_name = profile.get("name", "Pengguna")
+
+    return HTMLResponse(
+        content=f"""
+        <!DOCTYPE html>
+        <html lang="id">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Login Berhasil - Pet Assistant</title>
+            <style>
+                body {{
+                    font-family: 'Segoe UI', Roboto, sans-serif;
+                    background: #181825;
+                    color: #cdd6f4;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    height: 100vh;
+                    margin: 0;
+                }}
+                .card {{
+                    background: #1e1e2e;
+                    border: 1px solid rgba(166, 227, 161, 0.35);
+                    border-radius: 16px;
+                    padding: 36px 32px;
+                    text-align: center;
+                    max-width: 440px;
+                    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+                    animation: popIn 0.3s ease-out;
+                }}
+                @keyframes popIn {{
+                    from {{ opacity: 0; transform: scale(0.95); }}
+                    to {{ opacity: 1; transform: scale(1); }}
+                }}
+                .icon {{ font-size: 48px; margin-bottom: 12px; }}
+                h2 {{ color: #a6e3a1; margin: 0 0 10px 0; font-size: 20px; }}
+                p {{ color: #a6adc8; font-size: 14px; line-height: 1.5; margin-bottom: 16px; }}
+                .hint {{
+                    background: rgba(137, 180, 250, 0.1);
+                    border: 1px solid rgba(137, 180, 250, 0.25);
+                    color: #89b4fa;
+                    padding: 10px;
+                    border-radius: 8px;
+                    font-size: 12px;
+                    font-weight: 600;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <div class="icon">🐈✨</div>
+                <h2>Otentikasi Berhasil!</h2>
+                <p>Halo <strong>{user_name}</strong>, akun Google Anda telah terhubung dengan Pet Assistant Kitty.</p>
+                <div class="hint">
+                    🎉 Anda dapat menutup tab browser ini sekarang dan kembali ke aplikasi desktop.
+                </div>
+            </div>
+            <script>
+                // Otomatis tutup tab jika diizinkan oleh browser
+                setTimeout(() => {{
+                    window.close();
+                }}, 4000);
+            </script>
+        </body>
+        </html>
+        """
+    )
+
+@app.post("/api/google/logout", tags=["Google OAuth & Assistant"])
+def logout_google():
+    """Memutuskan akun Google dan menghapus token persisten."""
+    google_auth_manager.logout()
+    return {"status": "success", "message": "Akun Google berhasil diputuskan"}
+
+@app.post("/api/google/config", tags=["Google OAuth & Assistant"])
+def save_google_config(req: GoogleConfigRequest):
+    """Menyimpan Client ID dan Client Secret kustom Google Cloud."""
+    settings_manager.update_settings({
+        "google_oauth": {
+            "client_id": req.client_id.strip(),
+            "client_secret": req.client_secret.strip()
+        }
+    })
+    return {"status": "success", "auth_status": google_auth_manager.get_auth_status()}
+
+# Google Workspace REST Endpoints
+@app.get("/api/google/calendar/events", tags=["Google Workspace"])
+def get_calendar_events(max_results: int = 5, days_ahead: int = 7):
+    """Mengambil agenda/kegiatan mendatang dari Google Calendar."""
+    res = google_workspace.get_upcoming_events(max_results=max_results, days_ahead=days_ahead)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return res
+
+@app.post("/api/google/calendar/events", tags=["Google Workspace"])
+def create_calendar_event(req: GoogleCalendarEventCreateRequest):
+    """Menambahkan agenda baru ke Google Calendar."""
+    res = google_workspace.create_calendar_event(
+        summary=req.summary,
+        start_iso=req.start,
+        end_iso=req.end,
+        description=req.description or "",
+        location=req.location or ""
+    )
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return res
+
+@app.delete("/api/google/calendar/events/{event_id}", tags=["Google Workspace"])
+def delete_calendar_event(event_id: str):
+    """Menghapus agenda Google Calendar."""
+    res = google_workspace.delete_calendar_event(event_id)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return res
+
+@app.get("/api/google/tasks", tags=["Google Workspace"])
+def get_google_tasks(show_completed: bool = False, max_results: int = 15):
+    """Mengambil daftar tugas to-do list dari Google Tasks."""
+    res = google_workspace.get_tasks(show_completed=show_completed, max_results=max_results)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return res
+
+@app.post("/api/google/tasks", tags=["Google Workspace"])
+def create_google_task(req: GoogleTaskCreateRequest):
+    """Menambahkan tugas baru ke Google Tasks."""
+    res = google_workspace.create_task(
+        title=req.title,
+        notes=req.notes or "",
+        due_iso=req.due
+    )
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return res
+
+@app.post("/api/google/tasks/{task_id}/complete", tags=["Google Workspace"])
+def complete_google_task(task_id: str):
+    """Menandai tugas Google Tasks sebagai selesai."""
+    res = google_workspace.complete_task(task_id)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return res
+
+@app.delete("/api/google/tasks/{task_id}", tags=["Google Workspace"])
+def delete_google_task(task_id: str):
+    """Menghapus tugas dari Google Tasks."""
+    res = google_workspace.delete_task(task_id)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return res
+
+@app.get("/api/google/gmail/unread", tags=["Google Workspace"])
+def get_unread_emails(max_results: int = 5):
+    """Mengambil daftar email belum dibaca dari Inbox Gmail."""
+    res = google_workspace.get_unread_emails(max_results=max_results)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return res
+
+@app.post("/api/google/gmail/send", tags=["Google Workspace"])
+def send_gmail_email(req: GoogleSendEmailRequest):
+    """Mengirim email baru melalui Gmail."""
+    res = google_workspace.send_email(
+        to_email=req.to,
+        subject=req.subject,
+        body_text=req.body
+    )
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return res
 
 # System & OS Settings Endpoints
 @app.post("/api/system/open-speech-settings", tags=["System"])
@@ -262,14 +532,15 @@ def shutdown_system():
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await ws_manager.connect(websocket)
-    # Kirim status koneksi, settings, dan memories saat ini ke client baru
+    # Kirim status koneksi, settings, memories, dan google auth saat ini ke client baru
     await ws_manager.send_personal_message(
         {
             "event": "connected",
             "data": {
                 "message": "Terhubung ke Pet Assistant WebSocket Server",
                 "settings": settings_manager.get_settings(),
-                "memories": user_memory_manager.get_all_memories()
+                "memories": user_memory_manager.get_all_memories(),
+                "google_auth": google_auth_manager.get_auth_status()
             }
         },
         websocket

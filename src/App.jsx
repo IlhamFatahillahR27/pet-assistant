@@ -221,6 +221,13 @@ export default function App() {
       }
     });
 
+    const unsubGoogleAuth = wsClient.on('google_auth_changed', (authStatus) => {
+      console.log('[App] Google auth changed:', authStatus);
+      if (authStatus?.connected && authStatus?.user) {
+        setStatusText(`✨ Google Terhubung: ${authStatus.user.name}`);
+      }
+    });
+
     return () => {
       isMounted = false;
       if (typeof unlistenMoved === 'function') {
@@ -235,6 +242,7 @@ export default function App() {
       unsubSTTStatus();
       unsubChatChunk();
       unsubMemoryUpdated();
+      unsubGoogleAuth();
     };
   }, [resetAfkTimer]);
 

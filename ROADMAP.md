@@ -4,7 +4,7 @@ Dokumen ini berisi peta jalan (*roadmap*) pengembangan aplikasi **Pet Assistant*
 
 ---
 
-## 📍 Status Saat Ini: **Fase 7 (Selesai / Matang)**
+## 📍 Status Saat Ini: **Fase 8 (Selesai / Matang)**
 
 ---
 
@@ -141,12 +141,22 @@ graph TD
 
 ---
 
-### 🟠 Fase 8: Autentikasi Google OAuth & Integrasi Google Assistant
-> **Status**: ⏳ **Mendatang**
+### 🟠 Fase 8: Autentikasi Google OAuth & Integrasi Google Assistant / Google Workspace
+> **Status**: ✅ **SELESAI**
 
-- [ ] Fitur Login Google (OAuth 2.0 Client) via Tauri Web Shell.
-- [ ] Manajemen token autentikasi pengguna secara aman (*Secure Token Storage*).
-- [ ] Integrasi Google Assistant API & Google Workspace Services (Calendar, Tasks, Gmail).
+- [x] **Google OAuth 2.0 Client & Secure Token Storage (`google_auth_manager.py`)**:
+  - Alur otentikasi browser desktop resmi via endpoint callback lokal `http://127.0.0.1:8000/api/google/oauth/callback`.
+  - Manajemen siklus hidup token autentikasi (`google_tokens.json`) dengan mekanisme auto-refresh token otomatis saat kedaluwarsa.
+  - Dukungan kustomisasi Google Client ID & Client Secret melalui UI pengaturan dan `.env`.
+- [x] **Google Workspace Services Client (`google_workspace.py`)**:
+  - **Google Calendar**: Melihat agenda 7 hari ke depan, membuat event/agenda baru, dan menghapus agenda.
+  - **Google Tasks**: Mengambil to-do list aktif, menambah tugas baru, dan menandai tugas selesai.
+  - **Gmail**: Mengambil cuplikan email masuk belum dibaca (*unread messages*) dan mengirim email.
+- [x] **AI Brain Assistant Real-time Tool Enrichment (`ai_brain.py`)**:
+  - Auto-resolver cerdas yang mendeteksi pertanyaan seputar agenda, tugas, atau email, lalu menginjeksi data realtime Google ke konteks respon Kitty secara alami.
+- [x] **Google & Workspace Hub UI (`SettingsPanel.jsx` & `App.css`)**:
+  - Tab baru **"Google Hub"** dengan kartu profil terhubung, kartu agenda kalender, checklist tugas to-do, preview email unread, dan form kredensial OAuth kustom.
+  - Sinkronisasi real-time status autentikasi melalui WebSocket broadcast `google_auth_changed`.
 
 ---
 

@@ -218,4 +218,164 @@ export async function fetchOllamaLocalModels(baseUrl = 'http://localhost:11434')
   }
 }
 
+// =========================================================
+// GOOGLE OAUTH & GOOGLE WORKSPACE API CLIENTS
+// =========================================================
+
+export async function fetchGoogleStatus() {
+  try {
+    const res = await fetch(`${BASE_URL}/api/google/status`);
+    return await res.json();
+  } catch (err) {
+    console.error('Fetch Google status error:', err);
+    return { connected: false, configured: false, user: null, scopes: [] };
+  }
+}
+
+export async function getGoogleAuthUrl() {
+  try {
+    const res = await fetch(`${BASE_URL}/api/google/auth-url`);
+    return await res.json();
+  } catch (err) {
+    console.error('Get Google auth url error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+export async function logoutGoogle() {
+  try {
+    const res = await fetch(`${BASE_URL}/api/google/logout`, { method: 'POST' });
+    return await res.json();
+  } catch (err) {
+    console.error('Logout Google error:', err);
+    return { status: 'error', message: err.message };
+  }
+}
+
+export async function saveGoogleConfig(clientId, clientSecret) {
+  try {
+    const res = await fetch(`${BASE_URL}/api/google/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret }),
+    });
+    return await res.json();
+  } catch (err) {
+    console.error('Save Google config error:', err);
+    return { status: 'error', message: err.message };
+  }
+}
+
+export async function fetchCalendarEvents(maxResults = 5, daysAhead = 7) {
+  try {
+    const res = await fetch(`${BASE_URL}/api/google/calendar/events?max_results=${maxResults}&days_ahead=${daysAhead}`);
+    const data = await res.json();
+    return data.events || [];
+  } catch (err) {
+    console.error('Fetch Calendar events error:', err);
+    return [];
+  }
+}
+
+export async function createCalendarEvent(summary, start, end = null, description = '', location = '') {
+  try {
+    const res = await fetch(`${BASE_URL}/api/google/calendar/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ summary, start, end, description, location }),
+    });
+    return await res.json();
+  } catch (err) {
+    console.error('Create Calendar event error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+export async function deleteCalendarEvent(eventId) {
+  try {
+    const res = await fetch(`${BASE_URL}/api/google/calendar/events/${eventId}`, {
+      method: 'DELETE',
+    });
+    return await res.json();
+  } catch (err) {
+    console.error('Delete Calendar event error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+export async function fetchGoogleTasks(showCompleted = false, maxResults = 15) {
+  try {
+    const res = await fetch(`${BASE_URL}/api/google/tasks?show_completed=${showCompleted}&max_results=${maxResults}`);
+    const data = await res.json();
+    return data.tasks || [];
+  } catch (err) {
+    console.error('Fetch Google tasks error:', err);
+    return [];
+  }
+}
+
+export async function createGoogleTask(title, notes = '', due = null) {
+  try {
+    const res = await fetch(`${BASE_URL}/api/google/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, notes, due }),
+    });
+    return await res.json();
+  } catch (err) {
+    console.error('Create Google task error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+export async function completeGoogleTask(taskId) {
+  try {
+    const res = await fetch(`${BASE_URL}/api/google/tasks/${taskId}/complete`, {
+      method: 'POST',
+    });
+    return await res.json();
+  } catch (err) {
+    console.error('Complete Google task error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+export async function deleteGoogleTask(taskId) {
+  try {
+    const res = await fetch(`${BASE_URL}/api/google/tasks/${taskId}`, {
+      method: 'DELETE',
+    });
+    return await res.json();
+  } catch (err) {
+    console.error('Delete Google task error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+export async function fetchUnreadEmails(maxResults = 5) {
+  try {
+    const res = await fetch(`${BASE_URL}/api/google/gmail/unread?max_results=${maxResults}`);
+    const data = await res.json();
+    return data.emails || [];
+  } catch (err) {
+    console.error('Fetch unread emails error:', err);
+    return [];
+  }
+}
+
+export async function sendGmailEmail(to, subject, body) {
+  try {
+    const res = await fetch(`${BASE_URL}/api/google/gmail/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ to, subject, body }),
+    });
+    return await res.json();
+  } catch (err) {
+    console.error('Send Gmail error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+
 

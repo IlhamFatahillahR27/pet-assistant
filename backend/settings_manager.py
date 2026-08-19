@@ -36,6 +36,15 @@ DEFAULT_SETTINGS = {
         "enabled": True,
         "target_models": ["hey_jarvis", "alexa"],
         "threshold": 0.5
+    },
+    "google_oauth": {
+        "client_id": "",
+        "client_secret": "",
+        "enabled_services": {
+            "calendar": True,
+            "tasks": True,
+            "gmail": True
+        }
     }
 }
 

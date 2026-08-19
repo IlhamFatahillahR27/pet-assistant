@@ -18,6 +18,15 @@ import {
   EyeOff,
   Cpu,
   AlertCircle,
+  Calendar,
+  CheckSquare,
+  Mail,
+  Plus,
+  Trash2,
+  LogOut,
+  User,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import {
   fetchAvailableVoices,
@@ -27,6 +36,18 @@ import {
   fetchAIProviders,
   testAIConnection,
   fetchOllamaLocalModels,
+  fetchGoogleStatus,
+  getGoogleAuthUrl,
+  logoutGoogle,
+  saveGoogleConfig,
+  fetchCalendarEvents,
+  createCalendarEvent,
+  deleteCalendarEvent,
+  fetchGoogleTasks,
+  createGoogleTask,
+  completeGoogleTask,
+  deleteGoogleTask,
+  fetchUnreadEmails,
 } from '../services/api';
 import { CAT_SKINS, UI_THEMES } from '../config/catRegistry';
 
@@ -35,7 +56,7 @@ export default function SettingsPanel({
   onUpdateSettings,
   onBackToChat,
 }) {
-  const [activeTab, setActiveTab] = useState('ai'); // 'ai' | 'appearance' | 'voice'
+  const [activeTab, setActiveTab] = useState('ai'); // 'ai' | 'google' | 'appearance' | 'voice'
   const [voices, setVoices] = useState([]);
   const [isPlayingPreview, setIsPlayingPreview] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
@@ -47,6 +68,25 @@ export default function SettingsPanel({
   const [aiTestResult, setAiTestResult] = useState(null); // { success: boolean, message: string }
   const [ollamaModels, setOllamaModels] = useState([]);
   const [isLoadingOllama, setIsLoadingOllama] = useState(false);
+
+  // Google OAuth & Workspace State
+  const [googleStatus, setGoogleStatus] = useState({
+    connected: false,
+    configured: false,
+    user: null,
+    scopes: [],
+  });
+  const [calendarEvents, setCalendarEvents] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [unreadEmails, setUnreadEmails] = useState([]);
+  const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
+  const [showOAuthConfig, setShowOAuthConfig] = useState(false);
+  const [customClientId, setCustomClientId] = useState(settings?.google_oauth?.client_id || '');
+  const [customClientSecret, setCustomClientSecret] = useState(settings?.google_oauth?.client_secret || '');
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newEventSummary, setNewEventSummary] = useState('');
+  const [newEventStart, setNewEventStart] = useState('');
+  const [showAddEvent, setShowAddEvent] = useState(false);
 
   const ttsEnabled = settings?.tts?.enabled ?? true;
   const selectedVoiceId = settings?.tts?.voice_id ?? '';
@@ -85,7 +125,103 @@ export default function SettingsPanel({
         setProviders(res);
       }
     });
+
+    loadGoogleStatus();
   }, []);
+
+  const loadGoogleStatus = async () => {
+    const status = await fetchGoogleStatus();
+    setGoogleStatus(status);
+    if (status?.connected) {
+      loadGoogleWorkspaceData();
+    }
+  };
+
+  const loadGoogleWorkspaceData = async () => {
+    setIsLoadingGoogle(true);
+    try {
+      const [events, taskList, emails] = await Promise.all([
+        fetchCalendarEvents(5, 7),
+        fetchGoogleTasks(false, 10),
+        fetchUnreadEmails(5),
+      ]);
+      setCalendarEvents(events);
+      setTasks(taskList);
+      setUnreadEmails(emails);
+    } catch (err) {
+      console.error('Error loading Google Workspace data:', err);
+    } finally {
+      setIsLoadingGoogle(false);
+    }
+  };
+
+  const handleConnectGoogle = async () => {
+    const res = await getGoogleAuthUrl();
+    if (res?.success && res?.auth_url) {
+      await openExternalUrl(res.auth_url);
+    } else {
+      alert(res?.error || 'Gagal membuat URL login Google. Pastikan Client ID sudah dikonfigurasi.');
+    }
+  };
+
+  const handleLogoutGoogle = async () => {
+    if (window.confirm('Yakin ingin memutuskan koneksi akun Google?')) {
+      await logoutGoogle();
+      setGoogleStatus({ connected: false, configured: false, user: null, scopes: [] });
+      setCalendarEvents([]);
+      setTasks([]);
+      setUnreadEmails([]);
+    }
+  };
+
+  const handleSaveOAuthConfig = async (e) => {
+    e.preventDefault();
+    const res = await saveGoogleConfig(customClientId, customClientSecret);
+    if (res?.status === 'success') {
+      alert('Kredensial Google OAuth berhasil disimpan!');
+      if (res.auth_status) setGoogleStatus(res.auth_status);
+      setShowOAuthConfig(false);
+    }
+  };
+
+  const handleCreateTask = async (e) => {
+    e.preventDefault();
+    if (!newTaskTitle.trim()) return;
+    const res = await createGoogleTask(newTaskTitle.trim());
+    if (res?.success) {
+      setNewTaskTitle('');
+      const updated = await fetchGoogleTasks(false, 10);
+      setTasks(updated);
+    }
+  };
+
+  const handleCompleteTask = async (taskId) => {
+    await completeGoogleTask(taskId);
+    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+  };
+
+  const handleDeleteTask = async (taskId) => {
+    await deleteGoogleTask(taskId);
+    setTasks((prev) => prev.filter((t) => t.id !== taskId));
+  };
+
+  const handleCreateCalendarEvent = async (e) => {
+    e.preventDefault();
+    if (!newEventSummary.trim() || !newEventStart) return;
+    const res = await createCalendarEvent(newEventSummary.trim(), newEventStart);
+    if (res?.success) {
+      setNewEventSummary('');
+      setNewEventStart('');
+      setShowAddEvent(false);
+      const updated = await fetchCalendarEvents(5, 7);
+      setCalendarEvents(updated);
+    }
+  };
+
+  const handleDeleteCalendarEvent = async (eventId) => {
+    await deleteCalendarEvent(eventId);
+    setCalendarEvents((prev) => prev.filter((ev) => ev.id !== eventId));
+  };
 
   // Sync local sliders when settings prop arrives
   useEffect(() => {
@@ -246,6 +382,16 @@ export default function SettingsPanel({
           >
             <Bot size={13} />
             <span>Model AI</span>
+          </button>
+          <button
+            className={`tab-btn ${activeTab === 'google' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('google');
+              loadGoogleStatus();
+            }}
+          >
+            <Globe size={13} />
+            <span>Google Hub</span>
           </button>
           <button
             className={`tab-btn ${activeTab === 'appearance' ? 'active' : ''}`}
@@ -683,6 +829,282 @@ export default function SettingsPanel({
                     <li>Setelah selesai, suara baru otomatis muncul di pilihan suara di atas!</li>
                   </ol>
                 </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {/* ======================================================== */}
+        {/* TAB 4: GOOGLE OAUTH & WORKSPACE HUB */}
+        {/* ======================================================== */}
+        {activeTab === 'google' && (
+          <>
+            {/* Status Akun Google */}
+            <div className="google-account-card">
+              {googleStatus.connected && googleStatus.user ? (
+                <div className="google-profile-connected">
+                  <div className="google-avatar-wrapper">
+                    {googleStatus.user.picture ? (
+                      <img src={googleStatus.user.picture} alt="Avatar" className="google-avatar-img" />
+                    ) : (
+                      <div className="google-avatar-fallback"><User size={18} /></div>
+                    )}
+                    <span className="google-online-dot"></span>
+                  </div>
+                  <div className="google-user-details">
+                    <span className="google-user-name">{googleStatus.user.name}</span>
+                    <span className="google-user-email">{googleStatus.user.email}</span>
+                    <span className="google-connected-badge">🟢 Terhubung ke Google</span>
+                  </div>
+                  <button
+                    className="btn-google-logout"
+                    onClick={handleLogoutGoogle}
+                    title="Putuskan Hubungan Akun Google"
+                  >
+                    <LogOut size={12} />
+                    <span>Putuskan</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="google-profile-disconnected">
+                  <div className="google-promo-header">
+                    <div className="google-promo-icon-box">
+                      <Globe size={20} className="google-promo-icon" />
+                    </div>
+                    <div className="google-promo-texts">
+                      <span className="google-promo-title">Hubungkan Akun Google</span>
+                      <p className="google-promo-desc">
+                        Akses Google Calendar, Tasks, dan Gmail langsung melalui Kitty!
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    className="btn-google-login"
+                    onClick={handleConnectGoogle}
+                  >
+                    <Globe size={13} />
+                    <span>🔗 Login & Hubungkan Akun Google</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Google Workspace Live Hub (Ketika Terhubung) */}
+            {googleStatus.connected && (
+              <>
+                {/* 📅 Google Calendar Section */}
+                <div className="workspace-card">
+                  <div className="workspace-card-header">
+                    <div className="workspace-title-row">
+                      <Calendar size={14} className="workspace-icon cal-color" />
+                      <span className="workspace-title">Agenda Kalender (7 Hari)</span>
+                    </div>
+                    <div className="workspace-actions">
+                      <button
+                        className="btn-workspace-action"
+                        onClick={() => setShowAddEvent(!showAddEvent)}
+                        title="Tambah Agenda Baru"
+                      >
+                        <Plus size={11} />
+                        <span>Agenda</span>
+                      </button>
+                      <button
+                        className="btn-workspace-action"
+                        onClick={loadGoogleWorkspaceData}
+                        disabled={isLoadingGoogle}
+                        title="Segarkan Data"
+                      >
+                        <RefreshCw size={11} className={isLoadingGoogle ? 'spin-icon' : ''} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {showAddEvent && (
+                    <form onSubmit={handleCreateCalendarEvent} className="workspace-add-form">
+                      <input
+                        type="text"
+                        placeholder="Nama kegiatan (contoh: Rapat Tim)"
+                        value={newEventSummary}
+                        onChange={(e) => setNewEventSummary(e.target.value)}
+                        className="settings-text-input"
+                        required
+                      />
+                      <input
+                        type="datetime-local"
+                        value={newEventStart}
+                        onChange={(e) => setNewEventStart(e.target.value)}
+                        className="settings-text-input"
+                        required
+                      />
+                      <div className="form-buttons-row">
+                        <button type="submit" className="btn-form-submit">Simpan ke Kalender</button>
+                        <button type="button" className="btn-form-cancel" onClick={() => setShowAddEvent(false)}>Batal</button>
+                      </div>
+                    </form>
+                  )}
+
+                  <div className="workspace-item-list">
+                    {calendarEvents.length === 0 ? (
+                      <span className="workspace-empty">Tidak ada agenda mendatang.</span>
+                    ) : (
+                      calendarEvents.map((ev) => (
+                        <div key={ev.id} className="workspace-item calendar-item">
+                          <div className="item-content">
+                            <span className="item-title">{ev.summary}</span>
+                            <span className="item-sub">
+                              🕒 {new Date(ev.start).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })}
+                              {ev.location && ` • 📍 ${ev.location}`}
+                            </span>
+                          </div>
+                          <button
+                            className="btn-item-delete"
+                            onClick={() => handleDeleteCalendarEvent(ev.id)}
+                            title="Hapus Agenda"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* ✅ Google Tasks Section */}
+                <div className="workspace-card">
+                  <div className="workspace-card-header">
+                    <div className="workspace-title-row">
+                      <CheckSquare size={14} className="workspace-icon task-color" />
+                      <span className="workspace-title">Daftar Tugas (Google Tasks)</span>
+                    </div>
+                    <button
+                      className="btn-workspace-action"
+                      onClick={loadGoogleWorkspaceData}
+                      disabled={isLoadingGoogle}
+                      title="Segarkan Data"
+                    >
+                      <RefreshCw size={11} className={isLoadingGoogle ? 'spin-icon' : ''} />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleCreateTask} className="workspace-quick-add">
+                    <input
+                      type="text"
+                      placeholder="Tulis tugas baru..."
+                      value={newTaskTitle}
+                      onChange={(e) => setNewTaskTitle(e.target.value)}
+                      className="settings-text-input"
+                    />
+                    <button type="submit" className="btn-quick-add" disabled={!newTaskTitle.trim()}>
+                      <Plus size={13} />
+                    </button>
+                  </form>
+
+                  <div className="workspace-item-list">
+                    {tasks.length === 0 ? (
+                      <span className="workspace-empty">Tidak ada tugas aktif (Semua selesai!).</span>
+                    ) : (
+                      tasks.map((t) => (
+                        <div key={t.id} className="workspace-item task-item">
+                          <input
+                            type="checkbox"
+                            checked={t.status === 'completed'}
+                            onChange={() => handleCompleteTask(t.id)}
+                            className="task-checkbox"
+                            title="Tandai Selesai"
+                          />
+                          <span className="task-title-text">{t.title}</span>
+                          <button
+                            className="btn-item-delete"
+                            onClick={() => handleDeleteTask(t.id)}
+                            title="Hapus Tugas"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                {/* ✉️ Gmail Unread Section */}
+                <div className="workspace-card">
+                  <div className="workspace-card-header">
+                    <div className="workspace-title-row">
+                      <Mail size={14} className="workspace-icon mail-color" />
+                      <span className="workspace-title">Email Belum Dibaca (Inbox)</span>
+                    </div>
+                    <button
+                      className="btn-workspace-action"
+                      onClick={loadGoogleWorkspaceData}
+                      disabled={isLoadingGoogle}
+                      title="Segarkan Data"
+                    >
+                      <RefreshCw size={11} className={isLoadingGoogle ? 'spin-icon' : ''} />
+                    </button>
+                  </div>
+
+                  <div className="workspace-item-list">
+                    {unreadEmails.length === 0 ? (
+                      <span className="workspace-empty">Kotak masuk bersih! Tidak ada email unread.</span>
+                    ) : (
+                      unreadEmails.map((m) => (
+                        <div key={m.id} className="workspace-item email-item">
+                          <div className="email-header-row">
+                            <span className="email-from">{m.from.split('<')[0]}</span>
+                            <span className="email-date">{m.date ? new Date(m.date).toLocaleDateString('id-ID') : ''}</span>
+                          </div>
+                          <span className="email-subject">{m.subject}</span>
+                          <span className="email-snippet">{m.snippet}</span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* ⚙️ Form Kredensial OAuth Kustom */}
+            <div className="oauth-config-accordion">
+              <button
+                className="btn-toggle-oauth-config"
+                onClick={() => setShowOAuthConfig(!showOAuthConfig)}
+              >
+                <Key size={12} />
+                <span>Kredensial OAuth Google Cloud (Opsional)</span>
+                {showOAuthConfig ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+              </button>
+
+              {showOAuthConfig && (
+                <form onSubmit={handleSaveOAuthConfig} className="oauth-config-form">
+                  <span className="oauth-config-guide">
+                    Masukkan Client ID & Secret dari <strong>Google Cloud Console</strong> untuk menghubungkan akun Google Anda sendiri:
+                  </span>
+                  <div className="input-group">
+                    <label className="input-label">Client ID:</label>
+                    <input
+                      type="text"
+                      placeholder="xxxx.apps.googleusercontent.com"
+                      value={customClientId}
+                      onChange={(e) => setCustomClientId(e.target.value)}
+                      className="settings-text-input"
+                      required
+                    />
+                  </div>
+                  <div className="input-group">
+                    <label className="input-label">Client Secret:</label>
+                    <input
+                      type="password"
+                      placeholder="GOCSPX-..."
+                      value={customClientSecret}
+                      onChange={(e) => setCustomClientSecret(e.target.value)}
+                      className="settings-text-input"
+                      required
+                    />
+                  </div>
+                  <button type="submit" className="btn-save-oauth">
+                    Simpan Kredensial Google
+                  </button>
+                </form>
               )}
             </div>
           </>

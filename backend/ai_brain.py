@@ -8,6 +8,8 @@ from typing import List, Dict, Any, Optional, Callable
 from settings_manager import settings_manager
 from user_memory import user_memory_manager
 from ws_manager import ws_manager
+from google_auth_manager import google_auth_manager
+from google_workspace import google_workspace
 
 load_dotenv()
 
@@ -178,9 +180,83 @@ class AIBrainManager:
         }
 
     def get_full_system_instruction(self, base_prompt: str) -> str:
-        """Menggabungkan instruksi sistem kepribadian kucing dengan konteks memori pengguna."""
+        """Menggabungkan instruksi sistem kepribadian kucing dengan konteks memori pengguna dan status Google Workspace."""
         memory_context = user_memory_manager.get_memory_context_string()
-        return f"{base_prompt}\n{memory_context}"
+        
+        # Konteks Google Workspace
+        google_context = ""
+        auth_status = google_auth_manager.get_auth_status()
+        if auth_status.get("connected"):
+            u = auth_status.get("user") or {}
+            google_context = (
+                f"\n[Konteks Google Workspace]: Akun Google terhubung atas nama {u.get('name')} ({u.get('email')}). "
+                "Sebagai asisten Kitty yang pintar, kamu memiliki integrasi dengan Google Calendar, Google Tasks, dan Gmail pengguna."
+            )
+        else:
+            google_context = (
+                "\n[Konteks Google Workspace]: Akun Google belum terhubung. "
+                "Jika pengguna meminta untuk melihat/mengatur kalender, tugas, atau email, ingatkan secara manis bahwa mereka dapat menghubungkan akun di menu Pengaturan > Google & Workspace."
+            )
+
+        return f"{base_prompt}\n{memory_context}\n{google_context}"
+
+    def _resolve_realtime_workspace_data(self, prompt_text: str) -> str:
+        """Mengecek apakah prompt memerlukan data Google Calendar, Tasks, atau Gmail, lalu mengambilnya secara realtime."""
+        lower_p = prompt_text.lower()
+        auth_status = google_auth_manager.get_auth_status()
+        is_connected = auth_status.get("connected", False)
+
+        # Kata kunci Calendar
+        calendar_keywords = ["jadwal", "agenda", "kalender", "calendar", "acara hari ini", "jadwal besok", "agenda mendatang", "jadwal kuliah", "jadwal kerja"]
+        # Kata kunci Tasks
+        task_keywords = ["task", "tugas", "to-do", "todo", "daftar tugas", "catat to-do", "tugas hari ini", "list tugas"]
+        # Kata kunci Gmail
+        gmail_keywords = ["email", "gmail", "pesan masuk", "inbox", "cek email", "surat baru", "unread email"]
+
+        injected_data = []
+
+        if any(kw in lower_p for kw in calendar_keywords):
+            if is_connected:
+                cal_res = google_workspace.get_upcoming_events(max_results=5, days_ahead=7)
+                if cal_res.get("success"):
+                    events = cal_res.get("events", [])
+                    if events:
+                        ev_list_str = "\n".join([f"- {e['summary']} (Mulai: {e['start']}, Lokasi: {e['location'] or '-'})" for e in events])
+                        injected_data.append(f"[DATA REALTIME GOOGLE CALENDAR]:\n{ev_list_str}")
+                    else:
+                        injected_data.append("[DATA REALTIME GOOGLE CALENDAR]: Tidak ada agenda mendatang dalam 7 hari ke depan.")
+                else:
+                    injected_data.append(f"[DATA REALTIME GOOGLE CALENDAR ERROR]: {cal_res.get('error')}")
+
+        if any(kw in lower_p for kw in task_keywords):
+            if is_connected:
+                task_res = google_workspace.get_tasks(show_completed=False, max_results=8)
+                if task_res.get("success"):
+                    tasks = task_res.get("tasks", [])
+                    if tasks:
+                        t_list_str = "\n".join([f"- {t['title']} (Catatan: {t['notes'] or '-'}, Deadline: {t['due'] or '-'})" for t in tasks])
+                        injected_data.append(f"[DATA REALTIME GOOGLE TASKS]:\n{t_list_str}")
+                    else:
+                        injected_data.append("[DATA REALTIME GOOGLE TASKS]: Semua tugas sudah selesai / daftar tugas kosong.")
+                else:
+                    injected_data.append(f"[DATA REALTIME GOOGLE TASKS ERROR]: {task_res.get('error')}")
+
+        if any(kw in lower_p for kw in gmail_keywords):
+            if is_connected:
+                mail_res = google_workspace.get_unread_emails(max_results=5)
+                if mail_res.get("success"):
+                    emails = mail_res.get("emails", [])
+                    if emails:
+                        m_list_str = "\n".join([f"- Dari: {m['from']} | Subjek: {m['subject']} | Ringkasan: {m['snippet']}" for m in emails])
+                        injected_data.append(f"[DATA REALTIME GMAIL UNREAD]:\nTotal belum dibaca: {mail_res.get('total_unread_estimate', len(emails))} email\n{m_list_str}")
+                    else:
+                        injected_data.append("[DATA REALTIME GMAIL UNREAD]: Tidak ada email baru yang belum dibaca di Inbox.")
+                else:
+                    injected_data.append(f"[DATA REALTIME GMAIL ERROR]: {mail_res.get('error')}")
+
+        if injected_data:
+            return prompt_text + "\n\n" + "\n\n".join(injected_data)
+        return prompt_text
 
     def reset_chat_session(self):
         """Mereset riwayat percakapan sesi aktif."""
@@ -341,15 +417,18 @@ class AIBrainManager:
     def send_prompt_request_stream(self, prompt_text: str, chunk_callback: Optional[Callable[[str], None]] = None) -> str:
         """Router utama untuk mengirim prompt dan menerima stream chunk demi chunk."""
         with self._lock:
+            # 1. Perkaya prompt jika terdapat pertanyaan terkait Google Workspace
+            enriched_prompt = self._resolve_realtime_workspace_data(prompt_text)
+            
             cfg = self.get_active_provider_config()
             provider = cfg["provider"]
 
             print(f"[AIBrain] Routing request ke provider '{provider}' dengan model '{cfg['model']}'")
 
             if provider == "gemini":
-                return self._chat_gemini_stream(cfg, prompt_text, chunk_callback)
+                return self._chat_gemini_stream(cfg, enriched_prompt, chunk_callback)
             else:
-                return self._chat_openai_compatible_stream(cfg, prompt_text, chunk_callback)
+                return self._chat_openai_compatible_stream(cfg, enriched_prompt, chunk_callback)
 
     def send_prompt_request(self, prompt_text: str) -> str:
         """Mengirim prompt secara synchronous dan mengembalikan respon lengkap."""

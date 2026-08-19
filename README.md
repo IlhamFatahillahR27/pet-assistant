@@ -46,7 +46,14 @@
 ### 🎨 6. Tema Glassmorphism & Kontrol Desktop
 - **4 Tema Estetik**: Mocha Dark, Sakura Pink, Mint Cyberpunk, dan Solar Amber.
 - **Pencegahan Maximize Bug**: Jendela terkunci pada rasio widget dan tidak akan membesar/memenuhi layar saat di-klik ganda.
-- **🔴 Tombol Shut Down / Tutup Aplikasi**: Tombol Power di bar navigasi untuk menutup jendela desktop dan menghentikan backend server secara bersih.
+- **🔴 Tombol Shut Down / Tutup Aplikasi**: Tombol Power di bar navigasi untuk menutup jendela desktop dan menghentikan backend secara bersih.
+
+### 🌐 7. Integrasi Google OAuth & Google Workspace (Fase 8)
+- **Google OAuth 2.0 Desktop Login**: Hubungkan akun Google secara aman melalui browser bawaan dengan alur redirect lokal dan auto-refresh token.
+- **📅 Google Calendar**: Kitty dapat melihat jadwal agenda mendatang dan mencatat kegiatan baru ke kalender Google Anda.
+- **✅ Google Tasks**: Kitty dapat membaca to-do list aktif, menambah tugas baru, dan menandai tugas selesai lewat perintah suara/chat.
+- **✉️ Gmail Assistant**: Kitty dapat membaca cuplikan email masuk yang belum dibaca (*unread inbox*) dan mengirim email langsung.
+- **Google Hub UI**: Tab interaktif di Settings untuk memantau kalender, checklist tugas to-do, dan cuplikan email secara visual.
 
 ---
 
@@ -122,7 +129,24 @@ pip install -r requirements.txt
 
 # 4. Install dependensi Frontend React & Tauri
 npm install
+
+# 5. Salin file template konfigurasi .env (Opsional jika ingin mengatur API Key lewat file)
+copy .env.example .env
+
+# 6. Salin file template settings default (Opsional, backend juga dapat membuatnya otomatis)
+copy backend\settings.example.json backend\settings.json
 ```
+
+### ⚙️ 3. Panduan Penggunaan File Template (`.example`)
+
+Untuk menjaga keamanan token dan kredensial API agar tidak bocor ke publik, repositori ini menyertakan file template berekstensi `.example`:
+
+| File Template | File Target di Komputer Lokal | Cara Penggunaan & Tujuan |
+| :--- | :--- | :--- |
+| **`.env.example`** | **`.env`** *(Root Project)* | Salin (`copy .env.example .env`) lalu isi nilai API Key (Gemini, Groq, dll.) serta `GOOGLE_CLIENT_ID` & `GOOGLE_CLIENT_SECRET`. |
+| **`backend/settings.example.json`** | **`backend/settings.json`** | Salin (`copy backend\settings.example.json backend\settings.json`) untuk inisialisasi pengaturan awal (karakter kucing, volume TTS, provider AI default). Jika dilewati, backend akan otomatis membuatnya saat pertama kali dijalankan. |
+| **`backend/user_memory.example.json`** | **`backend/user_memory.json`** | *Referensi Skema*: File format memori pengguna. File `user_memory.json` akan dibuat dan dikelola otomatis oleh backend saat Kitty mengingat fakta baru dari obrolan. |
+| **`backend/google_tokens.example.json`** | **`backend/google_tokens.json`** | *Referensi Skema*: File format token OAuth Google. File `google_tokens.json` akan dibuat otomatis saat Anda pertama kali login via browser. |
 
 ---
 
@@ -139,6 +163,60 @@ Aplikasi mendukung input API Key langsung melalui **Menu Pengaturan (⚙️) -> 
 | **OpenRouter** | Akses ke ratusan model AI cloud dalam 1 API Key | 🔗 [OpenRouter Keys Portal](https://openrouter.ai/keys) |
 | **Ollama** | Model Lokal Offline (LLaMA 3, Mistral, Qwen 2.5) *(Gratis)* | 🔗 [Ollama Official Website](https://ollama.com) |
 | **LM Studio** | Local LLM Server dengan antarmuka desktop | 🔗 [LM Studio Download](https://lmstudio.ai) |
+
+---
+
+## 🔐 Panduan Setup Google OAuth 2.0 (Client ID & Secret)
+
+Untuk mengaktifkan fitur **Google Workspace (Google Calendar, Tasks, Gmail)** di Pet Assistant, Anda memerlukan **Google OAuth Client ID & Secret** dari Google Cloud Console *(100% Gratis & Tanpa Perlu Kartu Kredit)*:
+
+### 🛠️ Langkah Pembuatan Kredensial di Google Cloud Console:
+
+1. **Buka Google Cloud Console**:
+   - Kunjungi [console.cloud.google.com](https://console.cloud.google.com/).
+   - Buat Project Baru (misal: `Pet Assistant Desktop`) atau pilih project yang sudah ada.
+
+2. **Aktifkan 3 APIs Google Workspace**:
+   - Di menu navigasi samping, buka **APIs & Services > Library** (atau gunakan kotak pencarian atas).
+   - Cari dan klik tombol **Enable** (Aktifkan) untuk masing-masing 3 API berikut:
+     - 📅 **Google Calendar API**
+     - ✅ **Google Tasks API**
+     - ✉️ **Gmail API**
+
+3. **Konfigurasi OAuth Consent Screen**:
+   - Buka menu **APIs & Services > OAuth consent screen**.
+   - Pilih User Type: **External** -> Klik **Create**.
+   - Isi form data dasar:
+     - **App name**: `Pet Assistant`
+     - **User support email**: (Pilih email Anda)
+     - **Developer contact information**: (Ketik email Anda)
+   - Klik **Save and Continue** sampai ke langkah **Test users**.
+   - ⚠️ **PENTING (Test users)**: Klik tombol **+ ADD USERS**, lalu masukkan email Google Anda sendiri. *(Langkah ini wajib agar akun Anda dapat langsung login tanpa perlu verifikasi publik Google)*.
+   - Klik **Save and Continue** hingga selesai.
+
+4. **Buat Kredensial OAuth Client ID**:
+   - Buka menu **APIs & Services > Credentials**.
+   - Klik **+ CREATE CREDENTIALS** -> Pilih **OAuth client ID**.
+   - **Application type**: Pilih **Web application**.
+   - **Name**: `Pet Assistant Client`.
+   - Di bagian **Authorized redirect URIs**, klik tombol **+ ADD URI**, lalu masukkan persis URI callback lokal berikut:
+     ```text
+     http://127.0.0.1:8000/api/google/oauth/callback
+     ```
+   - Klik **CREATE**.
+   - Jendela pop-up akan muncul menampilkan **Your Client ID** dan **Your Client Secret**. Salin kedua nilai tersebut.
+
+5. **Simpan Kredensial ke Pet Assistant**:
+   - **Cara 1 (Langsung dari UI Aplikasi)**:
+     - Buka Pet Assistant -> Klik ikon `⚙️` (Pengaturan) -> Pilih Tab **"Google Hub"**.
+     - Buka menu **"Kredensial OAuth Google Cloud (Opsional)"**.
+     - Masukkan **Client ID** dan **Client Secret** Anda, lalu klik **"Simpan Kredensial Google"**.
+   - **Cara 2 (Melalui file `.env` di root project)**:
+     ```env
+     GOOGLE_CLIENT_ID=isi_client_id_anda.apps.googleusercontent.com
+     GOOGLE_CLIENT_SECRET=GOCSPX-isi_client_secret_anda
+     ```
+   - Setelah disimpan, klik tombol **"🔗 Login & Hubungkan Akun Google"** di aplikasi. Jendela browser akan terbuka meminta izin, dan akun Anda akan langsung terhubung secara otomatis ke Kitty! 🎉
 
 ---
 

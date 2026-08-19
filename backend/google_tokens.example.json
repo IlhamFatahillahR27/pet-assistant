@@ -1,0 +1,14 @@
+{
+  "access_token": "",
+  "refresh_token": "",
+  "expires_at": 0,
+  "token_type": "Bearer",
+  "scope": "openid https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/tasks https://www.googleapis.com/auth/gmail.modify https://www.googleapis.com/auth/gmail.send",
+  "user_profile": {
+    "id": "",
+    "email": "user@gmail.com",
+    "name": "User Example",
+    "picture": ""
+  },
+  "updated_at": 0
+}

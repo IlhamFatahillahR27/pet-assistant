@@ -1,0 +1,22 @@
+{
+  "memories": [
+    {
+      "id": "mem_example_01",
+      "fact": "Nama pengguna adalah Budi",
+      "category": "identity",
+      "created_at": "2026-08-19T10:00:00"
+    },
+    {
+      "id": "mem_example_02",
+      "fact": "Pengguna menyukai kopi hitam tanpa gula",
+      "category": "preference",
+      "created_at": "2026-08-19T10:05:00"
+    },
+    {
+      "id": "mem_example_03",
+      "fact": "Pengguna biasanya mulai bekerja jam 09:00 pagi",
+      "category": "habit",
+      "created_at": "2026-08-19T10:10:00"
+    }
+  ]
+}

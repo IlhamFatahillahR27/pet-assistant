@@ -36,5 +36,14 @@
     ],
     "threshold": 0.5
   },
+  "google_oauth": {
+    "client_id": "",
+    "client_secret": "",
+    "enabled_services": {
+      "calendar": true,
+      "tasks": true,
+      "gmail": true
+    }
+  },
   "ai_model": "gemini-1.5-flash"
 }

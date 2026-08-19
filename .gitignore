@@ -32,9 +32,21 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# User Memory & Dynamic Cache & Local Settings (Contain API Keys)
+# User Memory, OAuth Tokens & Local Settings (Contain API Keys & Secrets)
 backend/user_memory.json
+user_memory.json
 backend/settings.json
+settings.json
+backend/google_tokens.json
+google_tokens.json
+*tokens*.json
+*.token
+credentials.json
+client_secret*.json
+
+# Allow .example files to be tracked
+!*.example.json
+!*.example
 *.wav
 temp_*.wav
 pet_tts_*.wav
@@ -49,3 +61,4 @@ pet_tts_*.wav
 Thumbs.db
 Desktop.ini
 .DS_Store
+/ROADMAP.md
