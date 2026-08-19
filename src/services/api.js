@@ -176,3 +176,46 @@ export async function clearMemories() {
   }
 }
 
+export async function fetchAIProviders() {
+  try {
+    const res = await fetch(`${BASE_URL}/api/ai/providers`);
+    const data = await res.json();
+    return data.providers || [];
+  } catch (err) {
+    console.error('Fetch AI providers error:', err);
+    return [];
+  }
+}
+
+export async function testAIConnection(provider, model = '', apiKey = '', baseUrl = '') {
+  try {
+    const res = await fetch(`${BASE_URL}/api/ai/test`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        provider,
+        model,
+        api_key: apiKey,
+        base_url: baseUrl,
+      }),
+    });
+    return await res.json();
+  } catch (err) {
+    console.error('Test AI connection error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+export async function fetchOllamaLocalModels(baseUrl = 'http://localhost:11434') {
+  try {
+    const encodedUrl = encodeURIComponent(baseUrl);
+    const res = await fetch(`${BASE_URL}/api/ai/ollama/models?base_url=${encodedUrl}`);
+    const data = await res.json();
+    return data.models || [];
+  } catch (err) {
+    console.error('Fetch Ollama models error:', err);
+    return [];
+  }
+}
+
+

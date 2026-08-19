@@ -1,5 +1,5 @@
 import React from 'react';
-import { RotateCcw, Settings, MessageSquare, Brain } from 'lucide-react';
+import { RotateCcw, Settings, MessageSquare, Brain, Power } from 'lucide-react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 
 export default function Header({
@@ -20,6 +20,19 @@ export default function Header({
       } finally {
         onEndDrag?.();
       }
+    }
+  };
+
+  const handleCloseApp = async () => {
+    try {
+      try {
+        await fetch('http://127.0.0.1:8000/api/system/shutdown', { method: 'POST' });
+      } catch (_) {}
+      const appWindow = getCurrentWindow();
+      await appWindow.close();
+    } catch (err) {
+      console.warn('App close notice:', err);
+      window.close();
     }
   };
 
@@ -61,6 +74,14 @@ export default function Header({
           title="Pengaturan"
         >
           <Settings size={13} />
+        </button>
+
+        <button
+          className="btn-header btn-close-app"
+          onClick={handleCloseApp}
+          title="Tutup & Matikan Aplikasi"
+        >
+          <Power size={13} />
         </button>
       </div>
     </div>

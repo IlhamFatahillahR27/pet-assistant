@@ -32,8 +32,12 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# User Memory & Dynamic Cache
+# User Memory & Dynamic Cache & Local Settings (Contain API Keys)
 backend/user_memory.json
+backend/settings.json
+*.wav
+temp_*.wav
+pet_tts_*.wav
 
 # IDE & Code Editor Settings
 .vscode/

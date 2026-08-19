@@ -66,8 +66,24 @@ export default function App() {
   }, [resetAfkTimer]);
 
   useEffect(() => {
-    // 0. Set initial position at bottom-right of the screen
-    const initPosition = async () => {
+    let unlistenMoved = null;
+    let unlistenCustomMove = null;
+    let isMounted = true;
+    let isInitialized = false;
+
+    const handleMovementTrigger = () => {
+      if (!isMounted || !isInitialized) return;
+      setIsWindowMoving(true);
+      resetAfkTimer();
+
+      if (moveTimerRef.current) clearTimeout(moveTimerRef.current);
+      moveTimerRef.current = setTimeout(() => {
+        if (isMounted) setIsWindowMoving(false);
+      }, 350);
+    };
+
+    // 0. Set initial position at bottom-right, then activate move listeners
+    const initPositionAndListeners = async () => {
       try {
         const appWindow = getCurrentWindow();
         const monitor = await currentMonitor();
@@ -87,35 +103,23 @@ export default function App() {
       } catch (err) {
         console.warn('Tauri window positioning notice:', err);
       }
-    };
-    initPosition();
 
-    // 0.1 Listen to window move events in real-time to trigger 'lifted' pose
-    let unlistenMoved = null;
-    let unlistenCustomMove = null;
-    let isMounted = true;
-
-    const handleMovementTrigger = () => {
-      if (!isMounted) return;
-      setIsWindowMoving(true);
-      resetAfkTimer();
-
-      if (moveTimerRef.current) clearTimeout(moveTimerRef.current);
-      moveTimerRef.current = setTimeout(() => {
-        if (isMounted) setIsWindowMoving(false);
-      }, 400);
+      // Allow 500ms for OS position to settle before listening for user dragging
+      setTimeout(async () => {
+        if (!isMounted) return;
+        isInitialized = true;
+        setIsWindowMoving(false);
+        try {
+          const appWindow = getCurrentWindow();
+          unlistenMoved = await appWindow.onMoved(handleMovementTrigger);
+          unlistenCustomMove = await listen('window-moving', handleMovementTrigger);
+        } catch (err) {
+          console.warn('Tauri move event listener notice:', err);
+        }
+      }, 500);
     };
 
-    const setupWindowMoveListener = async () => {
-      try {
-        const appWindow = getCurrentWindow();
-        unlistenMoved = await appWindow.onMoved(handleMovementTrigger);
-        unlistenCustomMove = await listen('window-moving', handleMovementTrigger);
-      } catch (err) {
-        console.warn('Tauri move event listener notice:', err);
-      }
-    };
-    setupWindowMoveListener();
+    initPositionAndListeners();
 
     // 1. Fetch initial settings & memories
     fetchSettings().then((res) => {
@@ -316,7 +320,11 @@ export default function App() {
   const currentCatId = settings.selected_cat || 'cat_01';
 
   return (
-    <div className={`app-root ${currentTheme}`} data-theme={currentTheme}>
+    <div
+      className={`app-root ${currentTheme}`}
+      data-theme={currentTheme}
+      onDoubleClick={(e) => e.preventDefault()}
+    >
       <div className={`main-window ${isCollapsed ? 'collapsed-window' : ''}`}>
         {!isCollapsed && (
           <div className="chat-container">

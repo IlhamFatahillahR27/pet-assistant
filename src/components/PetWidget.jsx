@@ -39,9 +39,7 @@ export default function PetWidget({
 
   // Sync with isWindowMoving from App.jsx
   useEffect(() => {
-    if (isWindowMoving) {
-      setIsLifted(true);
-    }
+    setIsLifted(Boolean(isWindowMoving));
   }, [isWindowMoving]);
 
   const handleMouseDown = async (e) => {

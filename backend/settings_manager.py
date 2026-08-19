@@ -5,7 +5,25 @@ import threading
 SETTINGS_FILE = os.path.join(os.path.dirname(__file__), "settings.json")
 
 DEFAULT_SETTINGS = {
-    "ai_model": os.getenv("AI_MODEL_KEY", "gemini-1.5-flash"),
+    "selected_cat": "cat_01",
+    "theme": "theme-mocha",
+    "ai_provider_config": {
+        "provider": "gemini",
+        "model": "gemini-1.5-flash",
+        "temperature": 0.7,
+        "api_keys": {
+            "gemini": "",
+            "groq": "",
+            "openai": "",
+            "deepseek": "",
+            "custom": ""
+        },
+        "base_urls": {
+            "ollama": "http://localhost:11434/v1",
+            "custom": "http://localhost:1234/v1"
+        },
+        "system_prompt": ""
+    },
     "language": "id-ID",
     "tts": {
         "enabled": True,

@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from settings_manager import settings_manager
 from user_memory import user_memory_manager
 from ws_manager import ws_manager
-import gemini_brain
+from ai_brain import ai_brain, SUPPORTED_PROVIDERS
 import stt
 import tts
 import wake_word_listener
@@ -24,7 +24,7 @@ threading.excepthook = _custom_threading_excepthook
 
 app = FastAPI(
     title="Pet Assistant Backend API",
-    description="FastAPI & WebSocket Server untuk Pet Assistant",
+    description="FastAPI & WebSocket Server untuk Pet Assistant Multi-Model AI",
     version="2.0.0"
 )
 
@@ -45,10 +45,13 @@ async def startup_event():
     
     # Auto-start Wake Word Listener secara asinkron agar tidak memblokir Uvicorn startup
     settings = settings_manager.get_settings().get("wake_word", {})
-    if settings.get("enabled", False):
+    if settings.get("enabled", True):
         def async_start_listener():
+            import time
+            time.sleep(1.0)
             try:
                 wake_word_listener.start_global_wake_word_listener()
+                print("[Startup] Wake Word Listener berhasil dimulai dan aktif mendengarkan.")
             except Exception as e:
                 print(f"[Startup Warning] Gagal memulai Wake Word listener: {e}")
 
@@ -72,7 +75,9 @@ class SpeakRequest(BaseModel):
     voice_id: Optional[str] = None
 
 class SettingsUpdateRequest(BaseModel):
-    ai_model: Optional[str] = None
+    selected_cat: Optional[str] = None
+    theme: Optional[str] = None
+    ai_provider_config: Optional[Dict[str, Any]] = None
     language: Optional[str] = None
     tts: Optional[Dict[str, Any]] = None
     wake_word: Optional[Dict[str, Any]] = None
@@ -80,6 +85,16 @@ class SettingsUpdateRequest(BaseModel):
 class MemoryCreateRequest(BaseModel):
     fact: str
     category: Optional[str] = "general"
+
+class UrlRequest(BaseModel):
+    url: str
+
+class AITestRequest(BaseModel):
+    provider: str
+    model: Optional[str] = ""
+    api_key: Optional[str] = ""
+    base_url: Optional[str] = ""
+
 
 # REST Endpoints
 
@@ -104,8 +119,28 @@ async def update_settings(payload: SettingsUpdateRequest):
     await ws_manager.broadcast("settings_updated", updated)
     return {"status": "success", "settings": updated}
 
-class UrlRequest(BaseModel):
-    url: str
+# AI Provider Endpoints
+@app.get("/api/ai/providers", tags=["AI Model Switcher"])
+def get_ai_providers():
+    """Mengembalikan daftar provider AI, model, dan status konfigurasi."""
+    return {"providers": list(SUPPORTED_PROVIDERS.values())}
+
+@app.post("/api/ai/test", tags=["AI Model Switcher"])
+def test_ai_connection(req: AITestRequest):
+    """Mengetes kredensial / koneksi ke provider AI."""
+    result = ai_brain.test_provider_connection(
+        provider_id=req.provider,
+        model_id=req.model or "",
+        api_key=req.api_key or "",
+        base_url=req.base_url or ""
+    )
+    return result
+
+@app.get("/api/ai/ollama/models", tags=["AI Model Switcher"])
+def get_ollama_models(base_url: Optional[str] = "http://localhost:11434"):
+    """Mengambil daftar model AI yang sudah terinstall di Ollama lokal."""
+    models = ai_brain.fetch_ollama_local_models(base_url=base_url)
+    return {"models": models}
 
 # System & OS Settings Endpoints
 @app.post("/api/system/open-speech-settings", tags=["System"])
@@ -160,11 +195,11 @@ async def clear_all_memories():
     return {"status": "cleared", "memories": []}
 
 @app.post("/api/chat", tags=["AI Chat"])
-async def chat_with_gemini(req: ChatRequest):
+async def chat_with_ai(req: ChatRequest):
     if not req.prompt.strip():
         raise HTTPException(status_code=400, detail="Prompt tidak boleh kosong")
     
-    response_text = gemini_brain.send_prompt_request(req.prompt)
+    response_text = ai_brain.send_prompt_request(req.prompt)
     return {
         "prompt": req.prompt,
         "response": response_text
@@ -211,6 +246,17 @@ def stop_wakeword():
     settings_manager.update_settings({"wake_word": {"enabled": False}})
     return {"status": "stopped"}
 
+@app.post("/api/system/shutdown", tags=["System"])
+def shutdown_system():
+    """Menghentikan backend server dan membebaskan seluruh resource audio."""
+    wake_word_listener.stop_global_wake_word_listener()
+    def kill_proc():
+        import time, os, signal
+        time.sleep(0.3)
+        os.kill(os.getpid(), signal.SIGTERM)
+    threading.Thread(target=kill_proc, daemon=True).start()
+    return {"status": "shutting_down", "message": "Server sedang dihentikan"}
+
 # WebSocket Endpoint
 
 @app.websocket("/ws")
@@ -228,34 +274,49 @@ async def websocket_endpoint(websocket: WebSocket):
         },
         websocket
     )
+
+    # Pastikan wake word listener menyala saat frontend terhubung
+    ww_settings = settings_manager.get_settings().get("wake_word", {})
+    if ww_settings.get("enabled", True):
+        wake_word_listener.start_global_wake_word_listener()
     
     try:
         while True:
             data_str = await websocket.receive_text()
             try:
-                import json
                 payload = json.loads(data_str)
                 action = payload.get("action")
                 
                 if action == "chat":
                     prompt = payload.get("prompt", "")
                     if prompt:
-                        def stream_chunk(chunk):
-                            ws_manager.broadcast_threadsafe("chat_chunk", {"sender": "Asisten", "text": chunk, "done": False})
-                        
                         def process_chat():
                             try:
                                 print(f"[WS Chat] Processing prompt: {prompt}")
-                                full_resp = gemini_brain.send_prompt_request_stream(prompt, chunk_callback=stream_chunk)
-                                print(f"[WS Chat] Finished stream. Response length: {len(full_resp)}")
+                                def stream_chunk(chunk):
+                                    ws_manager.broadcast_threadsafe("chat_chunk", {"sender": "Asisten", "text": chunk, "done": False})
+                                
+                                # 1. Hasilkan jawaban dengan streaming teks langsung ke chat UI secara real-time
+                                full_resp = ai_brain.send_prompt_request_stream(prompt, chunk_callback=stream_chunk)
+                                # 2. Tampilkan teks lengkap instan di UI
                                 ws_manager.broadcast_threadsafe("chat_chunk", {"sender": "Asisten", "text": "", "done": True, "full_text": full_resp})
+                                
+                                # 3. Putar audio WAV secara paralel di background
+                                tts_settings = settings_manager.get_settings().get("tts", {})
+                                if tts_settings.get("enabled", True) and full_resp:
+                                    def async_speak():
+                                        rate = tts_settings.get("rate", 160)
+                                        volume = tts_settings.get("volume", 1.0)
+                                        voice_id = tts_settings.get("voice_id", "")
+                                        tts.text_to_speech(full_resp, rate=rate, volume=volume, voice_id=voice_id, sync=True)
+                                    
+                                    threading.Thread(target=async_speak, daemon=True).start()
                             except Exception as e:
                                 print(f"[WS Chat Error] {e}")
                                 ws_manager.broadcast_threadsafe("chat_chunk", {"sender": "Asisten", "text": f"Error: {str(e)}", "done": True, "full_text": str(e)})
                         
                         threading.Thread(target=process_chat, daemon=True).start()
 
-                
                 elif action == "stt":
                     threading.Thread(target=stt.process_voice_command, daemon=True).start()
                 
@@ -264,6 +325,10 @@ async def websocket_endpoint(websocket: WebSocket):
                     if text:
                         tts.text_to_speech(text)
                 
+                elif action == "reset_session":
+                    ai_brain.reset_chat_session()
+                    await ws_manager.send_personal_message({"event": "session_reset", "data": "Chat session reset"}, websocket)
+
                 elif action == "ping":
                     await ws_manager.send_personal_message({"event": "pong"}, websocket)
                     
